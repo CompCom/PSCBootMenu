@@ -14,10 +14,29 @@
 #include <algorithm>
 #include <fstream>
 #include <list>
+#include <string>
+#include <experimental/filesystem>
 
+
+namespace fs = std::experimental::filesystem;
 using GameControllerPtr = std::unique_ptr<GameController>;
 
 std::list<GameControllerEvent> ControllerEvents;
+std::string imageFolder("images");
+std::string themeFolder;
+
+Texture GetTexture(const std::string & pngFilePath, SDL_Renderer* renderer, int x = 0, int y = 0, bool centerImg = false)
+{
+    if(themeFolder.size() && fs::exists(themeFolder+pngFilePath))
+    {
+        return Texture(themeFolder+pngFilePath, renderer, x, y, centerImg);
+    }
+    else if(fs::exists(imageFolder+pngFilePath))
+    {
+        return Texture(imageFolder+pngFilePath, renderer, x, y, centerImg);
+    }
+    return Texture();
+}
 
 struct MenuItem
 {
@@ -30,6 +49,13 @@ struct MenuItem
         logo = Texture(logo_file, renderer, posX, posY-14, true);
         itemText = Texture(itemName, 24, renderer, posX, posY+142, true);
         selectedText = Texture(itemName, 24, renderer, posX, posY+142, true, 0xFF00FFFF);
+    };
+    MenuItem(std::string logo_file, std::string textFile, std::string hoverFile, std::string launchCommand, SDL_Renderer* renderer, int logoPosX, int logoPosY, int textPosX, int textPosY)
+    : launchCommand(launchCommand)
+    {
+        logo = GetTexture(logo_file, renderer, logoPosX, logoPosY, true);
+        itemText = GetTexture(textFile, renderer, textPosX, textPosY, true);
+        selectedText = GetTexture(hoverFile, renderer, textPosX, textPosY, true);
     };
     void Draw(SDL_Renderer* renderer)
     {
@@ -49,12 +75,17 @@ void handleButtonPress(uint8_t gamebutton, MenuItem * items)
         break;
     case SDL_CONTROLLER_BUTTON_A:
         std::ofstream out("/tmp/launchfilecommand");
-        if(items[0].selected)
-            out << items[0].launchCommand;
+        if(out.is_open())
+        {
+            if(items[0].selected)
+                out << items[0].launchCommand;
+            else
+                out << items[1].launchCommand;
+            out.close();
+            exit(0);
+        }
         else
-            out << items[1].launchCommand;
-        out.close();
-        exit(0);
+            exit(1);
     }
 }
 
@@ -72,11 +103,30 @@ int main(int argc, char * argv[])
             controllers.emplace_back(std::make_unique<GameController>(i));
     }
 
-    Texture Heading("Boot Menu", 48, renderer, 640, 80, true);
-    MenuItem items[2] = { MenuItem("images/retroarch.png", "RetroArch", "/media/lolhack/retroarch.sh", renderer, 440, 360),
-    MenuItem("images/bleem_logo.png", "BleemSync", "/media/lolhack/boot.sh", renderer, 840, 360) };
+    //Check arguments
+    for(int i = 1; i < argc; ++i)
+    {
+        if(strcasecmp(argv[i], "--image-folder") == 0)
+        {
+            imageFolder = argv[i+1];
+            ++i;
+        }
+        else if(strcasecmp(argv[i], "--theme-folder") == 0)
+        {
+            themeFolder = argv[i+1];
+            ++i;
+        }
+        else if(strcasecmp(argv[i], "--version") == 0)
+        {
+            std::cout << "PSC Boot Menu by CompCom version " << BOOT_MENU_VERSION << std::endl;
+            return 0;
+        }
+    }
+
+    Texture background = GetTexture("/Background.png", renderer);
+    MenuItem items[2] = { MenuItem("/RetroArch_Icon.png", "/RA.png", "/RA_Hover.png", "launch_retroarch", renderer, 384, 342, 385, 488),
+    MenuItem("/BleemSync_Icon.png", "/BS.png", "/BS_Hover.png", "launch_StockUI", renderer, 896, 342, 896, 488), };
     items[0].selected = true;
-    Texture CompComText("created by CompCom", 16, renderer, 1090, 678, true);
 
     while(true)
     {
@@ -114,10 +164,9 @@ int main(int argc, char * argv[])
         }
         ControllerEvents.clear();
 
-        Heading.Draw(renderer);
+        background.Draw(renderer);
         for(auto & item : items)
             item.Draw(renderer);
-        CompComText.Draw(renderer);
 
         sdl_context.EndFrame();
     }
