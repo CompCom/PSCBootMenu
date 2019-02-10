@@ -18,6 +18,7 @@
 #include <string>
 #include <experimental/filesystem>
 
+#define BOOT_MENU_VERSION "0.5.0"
 
 namespace fs = std::experimental::filesystem;
 using GameControllerPtr = std::unique_ptr<GameController>;
@@ -180,6 +181,23 @@ int main(int argc, char * argv[])
                 {
                     auto controllerPtr = SDL_GameControllerFromInstanceID(e.cdevice.which);
                     controllers.erase(std::remove_if(controllers.begin(), controllers.end(), [&](const GameControllerPtr & c) { return c->GetController() == controllerPtr; }), controllers.end());
+                }
+                break;
+            case SDL_KEYDOWN:
+                {
+                    switch(e.key.keysym.scancode)
+                    {
+                    case SDL_SCANCODE_SLEEP:
+                        return 0;
+                    case SDL_SCANCODE_AUDIOPLAY:
+                        handleButtonPress(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, items);
+                        break;
+                    case SDL_SCANCODE_EJECT:
+                        handleButtonPress(SDL_CONTROLLER_BUTTON_A, items);
+                        break;
+                    default:
+                        break;
+                    }
                 }
                 break;
             case SDL_QUIT:
