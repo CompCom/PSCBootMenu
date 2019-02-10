@@ -21,7 +21,7 @@ class SDL_Renderer;
 struct SDL_Context
 {
 public:
-    SDL_Context(std::chrono::milliseconds fpsTime = std::chrono::milliseconds(33), bool powerButtonExit = true);
+    SDL_Context(std::chrono::milliseconds fpsTime = std::chrono::milliseconds(33));
     ~SDL_Context();
     void StartFrame();
     void EndFrame();
@@ -33,7 +33,6 @@ public:
 
 private:
     std::chrono::time_point<std::chrono::system_clock> nextFrameTime;
-    bool powerButtonExit;
 };
 
 #endif

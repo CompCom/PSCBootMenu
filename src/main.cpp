@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018 CompCom
+  * Copyright (C) 2018-2019 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -60,7 +60,7 @@ void handleButtonPress(uint8_t gamebutton, MenuItem * items)
 
 int main(int argc, char * argv[])
 {
-    SDL_Context sdl_context(std::chrono::milliseconds(33), false);
+    SDL_Context sdl_context(std::chrono::milliseconds(33));
     auto renderer = sdl_context.renderer;
     //Using vector because list SEGFAULTS
     std::vector<GameControllerPtr> controllers;

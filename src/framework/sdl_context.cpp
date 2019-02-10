@@ -13,7 +13,7 @@
 #include <thread>
 #include <SDL.h>
 
-SDL_Context::SDL_Context(std::chrono::milliseconds fpsTime, bool powerButtonExit) : fpsTime(fpsTime), powerButtonExit(powerButtonExit)
+SDL_Context::SDL_Context(std::chrono::milliseconds fpsTime) : fpsTime(fpsTime)
 {
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS,"1");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER) < 0) {
