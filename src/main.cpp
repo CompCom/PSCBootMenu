@@ -9,6 +9,7 @@
 
 #include "framework/sdl_helper.h"
 #include "gamecontroller.h"
+#include <SDL_mixer.h>
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -103,12 +104,22 @@ int main(int argc, char * argv[])
             controllers.emplace_back(std::make_unique<GameController>(i));
     }
 
+    //Init Audio
+    SDL_Init(SDL_INIT_AUDIO);
+    Mix_OpenAudio(44100,MIX_DEFAULT_FORMAT,2,256);
+
+    std::string musicFolder;
     //Check arguments
     for(int i = 1; i < argc; ++i)
     {
         if(strcasecmp(argv[i], "--image-folder") == 0)
         {
             imageFolder = argv[i+1];
+            ++i;
+        }
+        else if(strcasecmp(argv[i], "--music-folder") == 0)
+        {
+            musicFolder = argv[i+1];
             ++i;
         }
         else if(strcasecmp(argv[i], "--theme-folder") == 0)
@@ -121,6 +132,24 @@ int main(int argc, char * argv[])
             std::cout << "PSC Boot Menu by CompCom version " << BOOT_MENU_VERSION << std::endl;
             return 0;
         }
+    }
+
+    if(musicFolder.size())
+    {
+        std::string wavFilePath;
+        if(themeFolder.size() && fs::exists(themeFolder+"/bootmenu.wav"))
+            wavFilePath = themeFolder+"/bootmenu.wav";
+        else if(fs::exists(musicFolder+"/bootmenu.wav"))
+            wavFilePath = musicFolder+"/bootmenu.wav";
+
+        if(wavFilePath.size())
+        {
+            Mix_Chunk* wav = Mix_LoadWAV(wavFilePath.c_str());
+            if(!wav || Mix_PlayChannel(-1, wav, -1) == -1)
+                std::cerr << Mix_GetError() << std::endl;
+        }
+        else
+            std::cerr << "Cannot open file: bootmenu.wav" << std::endl;
     }
 
     Texture background = GetTexture("/Background.png", renderer);
