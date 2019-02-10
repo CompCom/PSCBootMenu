@@ -18,9 +18,10 @@
 #include <string>
 #include <experimental/filesystem>
 
-#define BOOT_MENU_VERSION "0.5.0"
+#define BOOT_MENU_VERSION "0.6.0"
 
 namespace fs = std::experimental::filesystem;
+
 using GameControllerPtr = std::unique_ptr<GameController>;
 
 std::list<GameControllerEvent> ControllerEvents;
@@ -97,11 +98,15 @@ int main(int argc, char * argv[])
     auto renderer = sdl_context.renderer;
     //Using vector because list SEGFAULTS
     std::vector<GameControllerPtr> controllers;
-    SDL_GameControllerAddMapping("030000004c050000da0c000011010000,Sony Interactive Entertainment Controller,x:b3,a:b2,b:b1,y:b0,back:b8,start:b9,leftshoulder:b6,lefttrigger:b4,rightshoulder:b7,righttrigger:b5,leftx:a0,lefty:a1");
+
+    //Load SDL Game Controller Mappings
+    std::string game_mapping_file("/media/bleemsync/etc/boot_menu/gamecontrollerdb.txt");
+    if(fs::exists(game_mapping_file))
+        SDL_GameControllerAddMappingsFromFile(game_mapping_file.c_str());
 
     for (int i = 0; i < SDL_NumJoysticks(); ++i)
     {
-        if(std::string(SDL_JoystickNameForIndex(i)).find("Sony Interactive Entertainment Controller") != std::string::npos)
+        if(SDL_IsGameController(i))
             controllers.emplace_back(std::make_unique<GameController>(i));
     }
 
@@ -158,6 +163,10 @@ int main(int argc, char * argv[])
     MenuItem("/BleemSync_Icon.png", "/BS.png", "/BS_Hover.png", "launch_StockUI", renderer, 896, 342, 896, 488), };
     items[0].selected = true;
 
+    SDL_Event e;
+    //Clear SDL Events
+    while (SDL_PollEvent(&e)) {}
+
     while(true)
     {
         sdl_context.StartFrame();
@@ -166,7 +175,6 @@ int main(int argc, char * argv[])
             controller->Update();
         }
 
-        SDL_Event e;
         //Poll for quit event (CTRL+C)/Close
         while (SDL_PollEvent(&e)) {
             switch(e.type)
