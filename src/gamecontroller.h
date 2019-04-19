@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018 CompCom
+  * Copyright (C) 2018-2019 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -11,6 +11,7 @@
 #define GAMECONTROLLER_H_
 
 #include <memory>
+#include <chrono>
 
 #include <SDL.h>
 
@@ -20,11 +21,17 @@ struct GameControllerEvent
     bool state;
 };
 
+struct GameButtonState
+{
+    bool state;
+    std::chrono::time_point<std::chrono::system_clock> updateTime;
+};
+
 class GameController
 {
 private:
     std::shared_ptr<SDL_GameController> controller;
-    bool buttonState[15];
+    GameButtonState buttonState[15];
     bool mapJoystickToDpad;
     int id;
     void processButtonState(bool newState, int buttonId);

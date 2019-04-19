@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018 CompCom
+  * Copyright (C) 2018-2019 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -45,10 +45,16 @@ SDL_GameController* GameController::GetController() const
 
 void GameController::processButtonState(bool newState, int buttonId)
 {
-    if(newState != buttonState[buttonId])
+    using namespace std::chrono_literals;
+    if(newState != buttonState[buttonId].state)
     {
         ControllerEvents.push_back({buttonId, newState});
-        buttonState[buttonId] = newState;
+        buttonState[buttonId] = {newState, std::chrono::system_clock::now()};
+    }
+    else if(buttonState[buttonId].state && (std::chrono::system_clock::now()-buttonState[buttonId].updateTime) > 300ms)
+    {
+        ControllerEvents.push_back({buttonId, true});
+        buttonState[buttonId].updateTime += 50ms;
     }
 }
 
