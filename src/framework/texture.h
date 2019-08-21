@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2017-2018 CompCom
+  * Copyright (C) 2017-2019 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -19,6 +19,7 @@ struct Texture
     SDL_Rect rect;
     Texture();
     Texture(const std::string & text, int fontSize, SDL_Renderer* renderer, int x = 0, int y = 0, bool centerText = false, const int color = 0xFFFFFFFF);
+    Texture(const std::string & font, const std::string & text, int fontSize, SDL_Renderer* renderer, int x = 0, int y = 0, bool centerText = false, const uint8_t r = 0xFF, const uint8_t g = 0xFF, const uint8_t b = 0xFF);
     Texture(const std::string & pngFilePath, SDL_Renderer* renderer, int x = 0, int y = 0, bool centerImg = false);
     void Draw(SDL_Renderer* renderer);
     void Draw(SDL_Renderer* renderer, SDL_RendererFlip flip_enum);

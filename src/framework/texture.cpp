@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2017-2018 CompCom
+  * Copyright (C) 2017-2019 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -13,6 +13,7 @@
 #include <iostream>
 #include <cstring>
 #include <png.h>
+#include <SDL_ttf.h>
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
     #define rmask 0xff000000
@@ -33,6 +34,31 @@ Texture::Texture(const std::string & text, int fontSize, SDL_Renderer* renderer,
     texture = std::shared_ptr<SDL_Texture>(WriteText(text, fontSize, renderer, rect.w, rect.h, color), SDL_DestroyTexture);
     rect.x = (centerText) ? x-rect.w/2 : x;
     rect.y = (centerText) ? y-rect.h/2 : y;
+}
+
+Texture::Texture(const std::string & font, const std::string & text, int fontSize, SDL_Renderer* renderer, int x, int y, bool centerText, const uint8_t r, const uint8_t g, const uint8_t b)
+{
+    auto ttf_font = TTF_OpenFont(font.c_str(), fontSize);
+    if(ttf_font)
+    {
+        SDL_Color color = { r, g, b, 0xFF };
+        auto surface = TTF_RenderText_Blended(ttf_font, text.c_str(), color);
+        if(surface)
+        {
+            texture = std::shared_ptr<SDL_Texture>(SDL_CreateTextureFromSurface(renderer, surface), SDL_DestroyTexture);
+            SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_BLEND);
+            SDL_FreeSurface(surface);
+
+            SDL_QueryTexture(texture.get(), NULL, NULL, &rect.w, &rect.h);
+            rect.x = (centerText) ? x-rect.w/2 : x;
+            rect.y = (centerText) ? y-rect.h/2 : y;
+        }
+        else
+            std::cerr << TTF_GetError() << std::endl;
+        TTF_CloseFont(ttf_font);
+    }
+    else
+        std::cerr << TTF_GetError() << std::endl;
 }
 
 Texture::Texture(const std::string & pngFilePath, SDL_Renderer* renderer, int x, int y, bool centerImg)

@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2017-2018 CompCom
+  * Copyright (C) 2017-2019 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -12,6 +12,7 @@
 #include <iostream>
 #include <thread>
 #include <SDL.h>
+#include <SDL_ttf.h>
 
 SDL_Context::SDL_Context(std::chrono::milliseconds fpsTime) : fpsTime(fpsTime)
 {
@@ -27,11 +28,17 @@ SDL_Context::SDL_Context(std::chrono::milliseconds fpsTime) : fpsTime(fpsTime)
         SDL_DestroyWindow(window);
         exit(1);
     }
+    if(TTF_Init() == -1)
+    {
+        std::cerr << "Cannot initialize ttf. " << TTF_GetError() << std::endl;
+        exit(1);
+    }
     nextFrameTime = std::chrono::system_clock::now()+fpsTime;
 }
 
 SDL_Context::~SDL_Context()
 {
+    TTF_Quit();
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

@@ -9,6 +9,7 @@
 
 #include "framework/sdl_helper.h"
 #include "gamecontroller.h"
+#include "settings.h"
 #include <SDL_mixer.h>
 #include <iostream>
 #include <vector>
@@ -18,13 +19,11 @@
 #include <string>
 #include <experimental/filesystem>
 
-#define BOOT_MENU_VERSION "0.6.0"
+#define BOOT_MENU_VERSION "0.8.0"
 
 namespace fs = std::experimental::filesystem;
 
-using GameControllerPtr = std::unique_ptr<GameController>;
-
-std::list<GameControllerEvent> ControllerEvents;
+std::vector<GameControllerEvent> ControllerEvents;
 std::string imageFolder("images");
 std::string themeFolder;
 
@@ -67,10 +66,15 @@ struct MenuItem
     }
 };
 
-void handleButtonPress(uint8_t gamebutton, MenuItem * items)
+bool handleButtonPress(uint8_t gamebutton, MenuItem * items, SDL_Context* sdl_context, std::vector<GameControllerPtr> & controllers)
 {
     switch(gamebutton)
     {
+    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+        {
+            RunSettingsMenu(sdl_context, controllers);
+        }
+        return true;
     case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
     case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
         items[0].selected = !items[0].selected;
@@ -89,7 +93,9 @@ void handleButtonPress(uint8_t gamebutton, MenuItem * items)
         }
         else
             exit(1);
+        break;
     }
+    return false;
 }
 
 int main(int argc, char * argv[])
@@ -112,7 +118,7 @@ int main(int argc, char * argv[])
 
     //Init Audio
     SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100,MIX_DEFAULT_FORMAT,2,256);
+    Mix_OpenAudio(44100,MIX_DEFAULT_FORMAT,2,1024);
 
     std::string musicFolder;
     //Check arguments
@@ -131,6 +137,21 @@ int main(int argc, char * argv[])
         else if(strcasecmp(argv[i], "--theme-folder") == 0)
         {
             themeFolder = argv[i+1];
+            ++i;
+        }
+        else if(strcasecmp(argv[i], "--cfg-file") == 0)
+        {
+            cfgLocation = argv[i+1];
+            ++i;
+        }
+        else if(strcasecmp(argv[i], "--default-cfg-file") == 0)
+        {
+            defaultCfgLocation = argv[i+1];
+            ++i;
+        }
+        else if(strcasecmp(argv[i], "--ui-themes-folder") == 0)
+        {
+            uiThemesFolder = argv[i+1];
             ++i;
         }
         else if(strcasecmp(argv[i], "--version") == 0)
@@ -167,9 +188,9 @@ int main(int argc, char * argv[])
     //Clear SDL Events
     while (SDL_PollEvent(&e)) {}
 
-    while(true)
+    bool isRunning = true;
+    while(isRunning)
     {
-        sdl_context.StartFrame();
         for(auto & controller : controllers)
         {
             controller->Update();
@@ -196,12 +217,13 @@ int main(int argc, char * argv[])
                     switch(e.key.keysym.scancode)
                     {
                     case SDL_SCANCODE_SLEEP:
-                        return 0;
+                        isRunning = false;
+                        break;
                     case SDL_SCANCODE_AUDIOPLAY:
-                        handleButtonPress(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, items);
+                        handleButtonPress(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, items, &sdl_context, controllers);
                         break;
                     case SDL_SCANCODE_EJECT:
-                        handleButtonPress(SDL_CONTROLLER_BUTTON_A, items);
+                        handleButtonPress(SDL_CONTROLLER_BUTTON_A, items, &sdl_context, controllers);
                         break;
                     default:
                         break;
@@ -209,15 +231,18 @@ int main(int argc, char * argv[])
                 }
                 break;
             case SDL_QUIT:
-                return 0;
+                isRunning = false;
+                break;
             }
         }
         for(const auto & event : ControllerEvents)
         {
-            if(event.state)
-                handleButtonPress(event.button, items);
+            if(event.state == 1 && handleButtonPress(event.button, items, &sdl_context, controllers))
+                break;
         }
         ControllerEvents.clear();
+
+        sdl_context.StartFrame();
 
         background.Draw(renderer);
         for(auto & item : items)
@@ -225,6 +250,8 @@ int main(int argc, char * argv[])
 
         sdl_context.EndFrame();
     }
+
+    Mix_CloseAudio();
 
     return 0;
 }

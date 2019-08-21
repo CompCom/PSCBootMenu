@@ -18,7 +18,7 @@
 struct GameControllerEvent
 {
     int button;
-    bool state;
+    uint8_t state;
 };
 
 struct GameButtonState
@@ -43,5 +43,7 @@ public:
     SDL_GameController* GetController() const;
     void Update();
 };
+
+using GameControllerPtr = std::unique_ptr<GameController>;
 
 #endif

@@ -9,10 +9,10 @@
 
 #include "gamecontroller.h"
 #include <string>
-#include <list>
+#include <vector>
 #include <iostream>
 
-extern std::list<GameControllerEvent> ControllerEvents;
+extern std::vector<GameControllerEvent> ControllerEvents;
 
 GameController::GameController() : id(-1)
 {}
@@ -53,7 +53,7 @@ void GameController::processButtonState(bool newState, int buttonId)
     }
     else if(buttonState[buttonId].state && (std::chrono::system_clock::now()-buttonState[buttonId].updateTime) > 300ms)
     {
-        ControllerEvents.push_back({buttonId, true});
+        ControllerEvents.push_back({buttonId, 2});
         buttonState[buttonId].updateTime += 50ms;
     }
 }
