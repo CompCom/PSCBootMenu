@@ -12,12 +12,7 @@
 #include <vector>
 #include <iostream>
 
-extern std::vector<GameControllerEvent> ControllerEvents;
-
-GameController::GameController() : id(-1)
-{}
-
-GameController::GameController(int id)
+GameController::GameController(int id, std::vector<GameControllerEvent> & controllerEvents) : controllerEvents(controllerEvents)
 {
     this->id = id;
     controller = std::shared_ptr<SDL_GameController>(SDL_GameControllerOpen(id), SDL_GameControllerClose);
@@ -48,12 +43,12 @@ void GameController::processButtonState(bool newState, int buttonId)
     using namespace std::chrono_literals;
     if(newState != buttonState[buttonId].state)
     {
-        ControllerEvents.push_back({buttonId, newState});
+        controllerEvents.push_back({buttonId, newState});
         buttonState[buttonId] = {newState, std::chrono::system_clock::now()};
     }
     else if(buttonState[buttonId].state && (std::chrono::system_clock::now()-buttonState[buttonId].updateTime) > 300ms)
     {
-        ControllerEvents.push_back({buttonId, 2});
+        controllerEvents.push_back({buttonId, 2});
         buttonState[buttonId].updateTime += 50ms;
     }
 }

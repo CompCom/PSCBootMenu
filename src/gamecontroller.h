@@ -12,6 +12,7 @@
 
 #include <memory>
 #include <chrono>
+#include <vector>
 
 #include <SDL.h>
 
@@ -31,13 +32,13 @@ class GameController
 {
 private:
     std::shared_ptr<SDL_GameController> controller;
+    std::vector<GameControllerEvent> & controllerEvents;
     GameButtonState buttonState[15];
     bool mapJoystickToDpad;
     int id;
     void processButtonState(bool newState, int buttonId);
 public:
-    GameController();
-    GameController(int id);
+    GameController(int id, std::vector<GameControllerEvent> & controllerEvents);
     ~GameController();
     int GetId() const;
     SDL_GameController* GetController() const;

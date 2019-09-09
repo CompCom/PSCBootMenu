@@ -21,7 +21,11 @@ SDL_Context::SDL_Context(std::chrono::milliseconds fpsTime) : fpsTime(fpsTime)
         std::cerr << "SDL init failed with error: " << SDL_GetError() << std::endl;
         exit(1);
     }
+#ifdef __arm__
     window = SDL_CreateWindow("", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 1280, 720, SDL_WINDOW_FULLSCREEN);
+#else
+    window = SDL_CreateWindow("", 0, -10, 1280, 720, 0);
+#endif
     renderer = SDL_CreateRenderer(window, -1, 0);
     if(renderer == NULL) {
         std::cerr << "Cannot create renderer.\n";

@@ -14,6 +14,7 @@
 #include <cstring>
 #include <png.h>
 #include <SDL_ttf.h>
+#include <SDL_image.h>
 
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
     #define rmask 0xff000000
@@ -38,11 +39,17 @@ Texture::Texture(const std::string & text, int fontSize, SDL_Renderer* renderer,
 
 Texture::Texture(const std::string & font, const std::string & text, int fontSize, SDL_Renderer* renderer, int x, int y, bool centerText, const uint8_t r, const uint8_t g, const uint8_t b)
 {
+    rect.x = x;
+    rect.y = y;
+
+    if(text.size() == 0)
+        return;
+
     auto ttf_font = TTF_OpenFont(font.c_str(), fontSize);
     if(ttf_font)
     {
         SDL_Color color = { r, g, b, 0xFF };
-        auto surface = TTF_RenderText_Blended(ttf_font, text.c_str(), color);
+        auto surface = TTF_RenderUTF8_Blended_Wrapped(ttf_font, text.c_str(), color, 1152);
         if(surface)
         {
             texture = std::shared_ptr<SDL_Texture>(SDL_CreateTextureFromSurface(renderer, surface), SDL_DestroyTexture);
@@ -50,8 +57,11 @@ Texture::Texture(const std::string & font, const std::string & text, int fontSiz
             SDL_FreeSurface(surface);
 
             SDL_QueryTexture(texture.get(), NULL, NULL, &rect.w, &rect.h);
-            rect.x = (centerText) ? x-rect.w/2 : x;
-            rect.y = (centerText) ? y-rect.h/2 : y;
+            if(centerText)
+            {
+                rect.x -= rect.w/2;
+                rect.y -= rect.h/2;
+            }
         }
         else
             std::cerr << TTF_GetError() << std::endl;
@@ -61,11 +71,20 @@ Texture::Texture(const std::string & font, const std::string & text, int fontSiz
         std::cerr << TTF_GetError() << std::endl;
 }
 
-Texture::Texture(const std::string & pngFilePath, SDL_Renderer* renderer, int x, int y, bool centerImg)
+Texture::Texture(const std::string & imageFilePath, SDL_Renderer* renderer, int x, int y, bool centerImg)
 {
-    texture = std::shared_ptr<SDL_Texture>(LoadTexturePNG(renderer, pngFilePath, &rect), SDL_DestroyTexture);
+    texture = std::shared_ptr<SDL_Texture>(LoadTextureImage(renderer, imageFilePath, rect), SDL_DestroyTexture);
     rect.x = (centerImg) ? x-rect.w/2 : x;
     rect.y = (centerImg) ? y-rect.h/2 : y;
+}
+
+Texture::Texture(SDL_Renderer* renderer, int rectX, int rectY, int rectW, int rectH, int color, bool centerRect)
+{
+    texture = std::shared_ptr<SDL_Texture>(CreateRect(renderer, 1, 1, color), SDL_DestroyTexture);
+    if(centerRect)
+        rect = { rectX-rectW/2, rectY-rectH/2, rectW, rectH };
+    else
+        rect = { rectX, rectY, rectW, rectH };
 }
 
 void Texture::Draw(SDL_Renderer* renderer)
@@ -85,7 +104,18 @@ void Sprite::Draw(SDL_Renderer * renderer)
     SDL_RenderCopyEx(renderer, texture.get(), &sRect, &dRect, 0, NULL, SDL_FLIP_NONE);
 }
 
-SDL_Texture * LoadTexturePNG(SDL_Renderer *renderer, std::string file, SDL_Rect * rect)
+SDL_Texture * LoadTextureImage(SDL_Renderer *renderer, const std::string & file, SDL_Rect & rect)
+{
+    if(auto texture = IMG_LoadTexture(renderer, file.c_str()))
+    {
+        SDL_QueryTexture(texture, NULL, NULL, &rect.w, &rect.h);
+        return texture;
+    }
+    std::cerr << "Cannot open image file: " << file << "\n";
+    return nullptr;
+}
+
+SDL_Texture * LoadTexturePNG(SDL_Renderer *renderer, const std::string & file, SDL_Rect * rect)
 {
     SDL_Texture* texture = nullptr;
 
@@ -156,6 +186,20 @@ SDL_Texture * WriteText(const std::string & text, int fontSize, SDL_Renderer* re
         }
     }
     auto texture = SDL_CreateTextureFromSurface(renderer, surface);
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+    SDL_FreeSurface(surface);
+    return texture;
+}
+
+SDL_Texture * CreateRect(SDL_Renderer* renderer, int width, int height, const int color)
+{
+    SDL_Texture * texture = nullptr;
+    SDL_Rect rect { 0, 0, width, height};
+
+    auto surface = SDL_CreateRGBSurface(0, width, height, 32, rmask, gmask, bmask, amask);
+    SDL_FillRect(surface, &rect, color);
+
+    texture = SDL_CreateTextureFromSurface(renderer, surface);
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
     SDL_FreeSurface(surface);
     return texture;

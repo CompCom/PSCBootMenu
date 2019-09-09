@@ -7,121 +7,30 @@
   * of the License, or (at your option) any later version.
   */
 
-#include "framework/sdl_helper.h"
-#include "gamecontroller.h"
+#include "menuscreenmanager.h"
+#include "mainscreen.h"
 #include "settings.h"
-#include <SDL_mixer.h>
 #include <iostream>
 #include <vector>
 #include <algorithm>
-#include <fstream>
 #include <list>
 #include <string>
+#include <SDL_mixer.h>
 #include <experimental/filesystem>
 
 #define BOOT_MENU_VERSION "0.8.0"
 
 namespace fs = std::experimental::filesystem;
 
-std::vector<GameControllerEvent> ControllerEvents;
-std::string imageFolder("images");
-std::string themeFolder;
-
-Texture GetTexture(const std::string & pngFilePath, SDL_Renderer* renderer, int x = 0, int y = 0, bool centerImg = false)
-{
-    if(themeFolder.size() && fs::exists(themeFolder+pngFilePath))
-    {
-        return Texture(themeFolder+pngFilePath, renderer, x, y, centerImg);
-    }
-    else if(fs::exists(imageFolder+pngFilePath))
-    {
-        return Texture(imageFolder+pngFilePath, renderer, x, y, centerImg);
-    }
-    return Texture();
-}
-
-struct MenuItem
-{
-    Texture logo, itemText, selectedText;
-    std::string launchCommand;
-    bool selected = false;
-    MenuItem(std::string logo_file, std::string itemName, std::string launchCommand, SDL_Renderer* renderer, int posX, int posY)
-    : launchCommand(launchCommand)
-    {
-        logo = Texture(logo_file, renderer, posX, posY-14, true);
-        itemText = Texture(itemName, 24, renderer, posX, posY+142, true);
-        selectedText = Texture(itemName, 24, renderer, posX, posY+142, true, 0xFF00FFFF);
-    };
-    MenuItem(std::string logo_file, std::string textFile, std::string hoverFile, std::string launchCommand, SDL_Renderer* renderer, int logoPosX, int logoPosY, int textPosX, int textPosY)
-    : launchCommand(launchCommand)
-    {
-        logo = GetTexture(logo_file, renderer, logoPosX, logoPosY, true);
-        itemText = GetTexture(textFile, renderer, textPosX, textPosY, true);
-        selectedText = GetTexture(hoverFile, renderer, textPosX, textPosY, true);
-    };
-    void Draw(SDL_Renderer* renderer)
-    {
-        logo.Draw(renderer);
-        selected ? selectedText.Draw(renderer) : itemText.Draw(renderer);
-    }
-};
-
-bool handleButtonPress(uint8_t gamebutton, MenuItem * items, SDL_Context* sdl_context, std::vector<GameControllerPtr> & controllers)
-{
-    switch(gamebutton)
-    {
-    case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
-        {
-            RunSettingsMenu(sdl_context, controllers);
-        }
-        return true;
-    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-        items[0].selected = !items[0].selected;
-        items[1].selected = !items[1].selected;
-        break;
-    case SDL_CONTROLLER_BUTTON_A:
-        std::ofstream out("/tmp/launchfilecommand");
-        if(out.is_open())
-        {
-            if(items[0].selected)
-                out << items[0].launchCommand;
-            else
-                out << items[1].launchCommand;
-            out.close();
-            exit(0);
-        }
-        else
-            exit(1);
-        break;
-    }
-    return false;
-}
+fs::path imageFolder("images");
+fs::path themeFolder;
 
 int main(int argc, char * argv[])
 {
-    SDL_Context sdl_context(std::chrono::milliseconds(33));
-    auto renderer = sdl_context.renderer;
-    //Using vector because list SEGFAULTS
-    std::vector<GameControllerPtr> controllers;
+    SDL_Context sdl_context(std::chrono::milliseconds(16));
 
-    //Load SDL Game Controller Mappings
-    std::string game_mapping_file("/media/bleemsync/etc/boot_menu/gamecontrollerdb.txt");
-    if(fs::exists(game_mapping_file))
-        SDL_GameControllerAddMappingsFromFile(game_mapping_file.c_str());
-
-    for (int i = 0; i < SDL_NumJoysticks(); ++i)
-    {
-        if(SDL_IsGameController(i))
-            controllers.emplace_back(std::make_unique<GameController>(i));
-    }
-
-    //Init Audio
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100,MIX_DEFAULT_FORMAT,2,1024);
-
-    std::string musicFolder;
     //Check arguments
+    std::string musicFolder;
     for(int i = 1; i < argc; ++i)
     {
         if(strcasecmp(argv[i], "--image-folder") == 0)
@@ -161,11 +70,15 @@ int main(int argc, char * argv[])
         }
     }
 
+    //Init Audio
+    SDL_Init(SDL_INIT_AUDIO);
+    Mix_OpenAudio(44100,MIX_DEFAULT_FORMAT,2,1024);
+
     if(musicFolder.size())
     {
         std::string wavFilePath;
-        if(themeFolder.size() && fs::exists(themeFolder+"/bootmenu.wav"))
-            wavFilePath = themeFolder+"/bootmenu.wav";
+        if(fs::exists(themeFolder/"bootmenu.wav"))
+            wavFilePath = themeFolder/"bootmenu.wav";
         else if(fs::exists(musicFolder+"/bootmenu.wav"))
             wavFilePath = musicFolder+"/bootmenu.wav";
 
@@ -179,77 +92,11 @@ int main(int argc, char * argv[])
             std::cerr << "Cannot open file: bootmenu.wav" << std::endl;
     }
 
-    Texture background = GetTexture("/Background.png", renderer);
-    MenuItem items[2] = { MenuItem("/RetroArch_Icon.png", "/RA.png", "/RA_Hover.png", "launch_retroarch", renderer, 384, 342, 385, 488),
-    MenuItem("/BleemSync_Icon.png", "/BS.png", "/BS_Hover.png", "launch_StockUI", renderer, 896, 342, 896, 488), };
-    items[0].selected = true;
+    MenuScreenManager manager(&sdl_context);
+    manager.AddNewScreen(std::make_shared<MainScreen>());
 
-    SDL_Event e;
-    //Clear SDL Events
-    while (SDL_PollEvent(&e)) {}
-
-    bool isRunning = true;
-    while(isRunning)
-    {
-        for(auto & controller : controllers)
-        {
-            controller->Update();
-        }
-
-        //Poll for quit event (CTRL+C)/Close
-        while (SDL_PollEvent(&e)) {
-            switch(e.type)
-            {
-            case SDL_CONTROLLERDEVICEADDED:
-                {
-                    controllers.emplace_back(std::make_unique<GameController>(e.cdevice.which));
-                    std::cout << "Added device id: " << e.cdevice.which << std::endl;
-                }
-                break;
-            case SDL_CONTROLLERDEVICEREMOVED:
-                {
-                    auto controllerPtr = SDL_GameControllerFromInstanceID(e.cdevice.which);
-                    controllers.erase(std::remove_if(controllers.begin(), controllers.end(), [&](const GameControllerPtr & c) { return c->GetController() == controllerPtr; }), controllers.end());
-                }
-                break;
-            case SDL_KEYDOWN:
-                {
-                    switch(e.key.keysym.scancode)
-                    {
-                    case SDL_SCANCODE_SLEEP:
-                        isRunning = false;
-                        break;
-                    case SDL_SCANCODE_AUDIOPLAY:
-                        handleButtonPress(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, items, &sdl_context, controllers);
-                        break;
-                    case SDL_SCANCODE_EJECT:
-                        handleButtonPress(SDL_CONTROLLER_BUTTON_A, items, &sdl_context, controllers);
-                        break;
-                    default:
-                        break;
-                    }
-                }
-                break;
-            case SDL_QUIT:
-                isRunning = false;
-                break;
-            }
-        }
-        for(const auto & event : ControllerEvents)
-        {
-            if(event.state == 1 && handleButtonPress(event.button, items, &sdl_context, controllers))
-                break;
-        }
-        ControllerEvents.clear();
-
-        sdl_context.StartFrame();
-
-        background.Draw(renderer);
-        for(auto & item : items)
-            item.Draw(renderer);
-
-        sdl_context.EndFrame();
-    }
+    while(manager.ScreenAvailable())
+        manager.Run();
 
     Mix_CloseAudio();
 
