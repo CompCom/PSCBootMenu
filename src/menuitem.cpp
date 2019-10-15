@@ -201,6 +201,52 @@ int VItemCollection::handleButtonPress(uint8_t gamebutton, uint8_t state)
     return 0;
 }
 
+void VItemScrollCollection::clearItems()
+{
+    items.clear();
+    topItemId = 0;
+    currentItem = 0;
+}
+void VItemScrollCollection::draw(SDL_Renderer* renderer, bool active)
+{
+    for(int i = topItemId, count = std::min(topItemId+displayItemCount, (int)items.size()); i < count; ++i)
+        items[i]->draw(renderer, active && i == currentItem);
+}
+int VItemScrollCollection::handleButtonPress(uint8_t gamebutton, uint8_t state)
+{
+    int result = items[currentItem]->handleButtonPress(gamebutton, state);
+    if(result == -1)
+    {
+        if(currentItem == 0)
+            return -1;
+        currentItem = currentItem-1;
+    }
+    else if(result == 1)
+    {
+        if(currentItem == items.size()-1)
+            return 1;
+        currentItem = currentItem+1;
+    }
+
+    if(currentItem < topItemId)
+    {
+        topItemId = currentItem;
+        moveItems();
+    }
+    else if(currentItem >= topItemId+displayItemCount)
+    {
+        topItemId = currentItem - displayItemCount + 1;
+        moveItems();
+    }
+
+    return 0;
+}
+void VItemScrollCollection::moveItems()
+{
+    for(unsigned int i = topItemId, count = 0, max = std::min(topItemId+displayItemCount, (int)items.size()); i < max; ++i, ++count)
+        items[i]->setPosition(x+xOffset, y+yOffset*count);
+}
+
 BoolToggle::BoolToggle(const std::string & variable_name, bool value, SDL_Renderer * renderer) : value(value)
 {
     nameTexture = Texture(fontBold, variable_name, 16, renderer);
@@ -464,4 +510,81 @@ void ScrollingContainer::draw(SDL_Renderer* renderer, bool active)
 {
     for(unsigned int i = 0, count = items.size(); i < count; ++i)
         items[i]->draw(renderer, (scrolling) ? false : active && i == currentItem);
+}
+
+MessageBox::MessageBox(const std::string & heading, const std::string & msg, SDL_Renderer * renderer) : renderer(renderer)
+{
+    message = Texture(font, msg, 24, renderer, 10);
+    title = Texture(fontBold, heading, 36, renderer, (message.rect.w+20)/2, 0, true, 0xFF, 0x80, 0);
+    title.rect.y = 5;
+    message.rect.y = 10 + title.rect.h + 10;
+    bg = Texture(renderer, 0, 0, message.rect.w+20, title.rect.h+message.rect.h+30, 0xFF000000, false);
+    overlay = Texture(renderer, 0, 0, 1280, 720, 0x80000000, false);
+}
+int MessageBox::handleButtonPress(uint8_t gamebutton, uint8_t state)
+{
+    return 0;
+}
+void MessageBox::setPosition(int x, int y)
+{
+    x -= bg.rect.w / 2;
+    y -= bg.rect.h / 2;
+    bg.rect.x += x - posX;
+    bg.rect.y += y - posY;
+    title.rect.x += x - posX;
+    title.rect.y += y - posY;
+    message.rect.x += x - posX;
+    message.rect.y += y - posY;
+    posX = x;
+    posY = y;
+}
+void MessageBox::draw(SDL_Renderer* renderer, bool active)
+{
+    overlay.Draw(renderer);
+    bg.Draw(renderer);
+    title.Draw(renderer);
+    message.Draw(renderer);
+}
+
+AdvancedPushButton::AdvancedPushButton(const std::string & buttonText, int fontSize, SDL_Renderer * renderer, int x, int y, bool center)
+{
+    buttonTexture = Texture(fontBold, buttonText, fontSize, renderer, x, y, center);
+}
+int AdvancedPushButton::handleButtonPress(uint8_t gamebutton, uint8_t state)
+{
+    switch(gamebutton)
+    {
+    case SDL_CONTROLLER_BUTTON_DPAD_UP:
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+        return -1;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+        return 1;
+    default:
+        if(state == 1 && onPress.count(gamebutton))
+            onPress[gamebutton]();
+        break;
+    }
+    return 0;
+}
+void AdvancedPushButton::setPosition(int x, int y)
+{
+    buttonTexture.rect.x = x;
+    buttonTexture.rect.y = y;
+}
+void AdvancedPushButton::draw(SDL_Renderer* renderer, bool active)
+{
+    if(previousState != active)
+    {
+        if(active)
+        {
+            SDL_SetTextureColorMod(buttonTexture.texture.get(), 255, 255, 0);
+            if(onEnter)
+                onEnter();
+        }
+        else
+            SDL_SetTextureColorMod(buttonTexture.texture.get(), 255, 255, 255);
+    }
+    buttonTexture.Draw(renderer);
+    previousState = active;
 }

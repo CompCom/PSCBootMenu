@@ -1,5 +1,6 @@
 #include "mainscreen.h"
 #include "menuscreenmanager.h"
+#include "networkscreen.h"
 #include "settings.h"
 #include "json.hpp"
 #include <iostream>
@@ -120,6 +121,10 @@ void MainScreen::handleButtonPress(const GameControllerEvent * event)
             manager->AddNewScreen(std::make_shared<SettingsScreen>());
             return;
         }
+        break;
+    case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+        if(event->state == 1)
+            manager->AddNewScreen(std::make_shared<NetworkScreen>());
         break;
     default:
         container->handleButtonPress(event->button, event->state);

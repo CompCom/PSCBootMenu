@@ -101,6 +101,16 @@ struct VItemCollection : ItemCollection
 };
 using VItemCollectionPtr = std::shared_ptr<VItemCollection>;
 
+struct VItemScrollCollection : ItemCollection
+{
+    int displayItemCount = 10, topItemId = 0;
+    void clearItems();
+    void draw(SDL_Renderer* renderer, bool active);
+    int handleButtonPress(uint8_t gamebutton, uint8_t state);
+    void moveItems();
+};
+using VItemScrollCollectionPtr = std::shared_ptr<VItemScrollCollection>;
+
 struct BoolToggle : MenuItem
 {
     BoolToggle(const std::string & variable_name, bool value, SDL_Renderer * renderer);
@@ -180,4 +190,30 @@ struct ScrollingContainer : MenuItem
     void draw(SDL_Renderer* renderer, bool active);
 };
 using ScrollingContainerPtr = std::shared_ptr<ScrollingContainer>;
+
+struct MessageBox : MenuItem
+{
+    MessageBox(const std::string & heading, const std::string & msg, SDL_Renderer * renderer);
+    SDL_Renderer * renderer;
+    int posX = 0, posY = 0;
+    Texture bg, title, message, overlay;
+    int handleButtonPress(uint8_t gamebutton, uint8_t state);
+    void setPosition(int x, int y);
+    void draw(SDL_Renderer* renderer, bool active);
+};
+
+#include <map>
+struct AdvancedPushButton : MenuItem
+{
+    AdvancedPushButton(const std::string & buttonText, int fontSize, SDL_Renderer * renderer, int x, int y, bool center = true);
+    Texture buttonTexture;
+    bool previousState = false;
+    std::map<uint8_t, std::function<void()>> onPress;
+    std::function<void()> onEnter;
+    int handleButtonPress(uint8_t gamebutton, uint8_t state);
+    void setPosition(int x, int y) override;
+    void draw(SDL_Renderer* renderer, bool active);
+};
+using AdvancedPushButtonPtr = std::shared_ptr<AdvancedPushButton>;
+
 #endif
