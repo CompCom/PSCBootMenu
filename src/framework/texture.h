@@ -22,8 +22,15 @@ struct Texture
     Texture(const std::string & font, const std::string & text, int fontSize, SDL_Renderer* renderer, int x = 0, int y = 0, bool centerText = false, const uint8_t r = 0xFF, const uint8_t g = 0xFF, const uint8_t b = 0xFF);
     Texture(const std::string & imageFilePath, SDL_Renderer* renderer, int x = 0, int y = 0, bool centerImg = false);
     Texture(SDL_Renderer* renderer, int rectX, int rectY, int rectW, int rectH, int color, bool centerRect = true);
+    void ConvertSurfaceToTexture(SDL_Surface * surface, SDL_Renderer* renderer, int x, int y, bool centerText);
+    void CreateMultiLineTexture(const std::string & font, const std::string & text, int fontSize, SDL_Renderer* renderer, int x, int y, bool centerText, const uint8_t r, const uint8_t g, const uint8_t b);
+    void CreateRendableTexture(SDL_Renderer* renderer, int rectW, int rectH, int rectX = 0, int rectY = 0, bool center = false);
     void Draw(SDL_Renderer* renderer);
     void Draw(SDL_Renderer* renderer, SDL_RendererFlip flip_enum);
+    void LoadImage(const std::string & imageFilePath, SDL_Renderer* renderer, bool updateRect = false);
+    void SetAsRenderTarget(SDL_Renderer* renderer);
+    void SetPosition(int x, int y, bool center = false);
+    void SetSize(int width, int height);
 };
 
 struct Sprite
@@ -33,7 +40,7 @@ struct Sprite
     void Draw(SDL_Renderer * renderer);
 };
 
-SDL_Texture * LoadTextureImage(SDL_Renderer *renderer, const std::string & file, SDL_Rect & rect);
+SDL_Texture * LoadTextureImage(SDL_Renderer *renderer, const std::string & file, SDL_Rect * rect = nullptr);
 SDL_Texture * LoadTexturePNG(SDL_Renderer *renderer, const std::string & file, SDL_Rect * rect = nullptr);
 SDL_Texture * WriteText(const std::string & text, int fontSize, SDL_Renderer* renderer, int & textureWidth, int & textureHeight, const int color = 0xFFFFFF);
 SDL_Texture * CreateRect(SDL_Renderer* renderer, int width, int height, const int color);

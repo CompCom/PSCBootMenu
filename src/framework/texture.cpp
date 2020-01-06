@@ -12,6 +12,7 @@
 
 #include <iostream>
 #include <cstring>
+#include <list>
 #include <png.h>
 #include <SDL_ttf.h>
 #include <SDL_image.h>
@@ -39,41 +40,29 @@ Texture::Texture(const std::string & text, int fontSize, SDL_Renderer* renderer,
 
 Texture::Texture(const std::string & font, const std::string & text, int fontSize, SDL_Renderer* renderer, int x, int y, bool centerText, const uint8_t r, const uint8_t g, const uint8_t b)
 {
-    rect.x = x;
-    rect.y = y;
-
     if(text.size() == 0)
         return;
 
-    auto ttf_font = TTF_OpenFont(font.c_str(), fontSize);
-    if(ttf_font)
+    if(text.find('\n') != std::string::npos)
+        CreateMultiLineTexture(font, text, fontSize, renderer, x, y, centerText, r, g, b);
+    else
     {
-        SDL_Color color = { r, g, b, 0xFF };
-        auto surface = TTF_RenderUTF8_Blended_Wrapped(ttf_font, text.c_str(), color, 1152);
-        if(surface)
+        if(auto ttf_font = TTF_OpenFont(font.c_str(), fontSize))
         {
-            texture = std::shared_ptr<SDL_Texture>(SDL_CreateTextureFromSurface(renderer, surface), SDL_DestroyTexture);
-            SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_BLEND);
-            SDL_FreeSurface(surface);
-
-            SDL_QueryTexture(texture.get(), NULL, NULL, &rect.w, &rect.h);
-            if(centerText)
-            {
-                rect.x -= rect.w/2;
-                rect.y -= rect.h/2;
-            }
+            if(auto surface = TTF_RenderUTF8_Blended_Wrapped(ttf_font, text.c_str(), SDL_Color{r, g, b, 0xFF}, 1152))
+                ConvertSurfaceToTexture(surface, renderer, x, y, centerText);
+            else
+                std::cerr << TTF_GetError() << std::endl;
+            TTF_CloseFont(ttf_font);
         }
         else
             std::cerr << TTF_GetError() << std::endl;
-        TTF_CloseFont(ttf_font);
     }
-    else
-        std::cerr << TTF_GetError() << std::endl;
 }
 
 Texture::Texture(const std::string & imageFilePath, SDL_Renderer* renderer, int x, int y, bool centerImg)
 {
-    texture = std::shared_ptr<SDL_Texture>(LoadTextureImage(renderer, imageFilePath, rect), SDL_DestroyTexture);
+    texture = std::shared_ptr<SDL_Texture>(LoadTextureImage(renderer, imageFilePath, &rect), SDL_DestroyTexture);
     rect.x = (centerImg) ? x-rect.w/2 : x;
     rect.y = (centerImg) ? y-rect.h/2 : y;
 }
@@ -85,6 +74,72 @@ Texture::Texture(SDL_Renderer* renderer, int rectX, int rectY, int rectW, int re
         rect = { rectX-rectW/2, rectY-rectH/2, rectW, rectH };
     else
         rect = { rectX, rectY, rectW, rectH };
+}
+
+void Texture::ConvertSurfaceToTexture(SDL_Surface * surface, SDL_Renderer* renderer, int x, int y, bool centerText)
+{
+    texture = std::shared_ptr<SDL_Texture>(SDL_CreateTextureFromSurface(renderer, surface), SDL_DestroyTexture);
+    SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_BLEND);
+    SDL_FreeSurface(surface);
+
+    SDL_QueryTexture(texture.get(), NULL, NULL, &rect.w, &rect.h);
+    if(centerText)
+    {
+        rect.x = x - rect.w/2;
+        rect.y = y - rect.h/2;
+    }
+    else
+    {
+        rect.x = x;
+        rect.y = y;
+    }
+}
+
+void Texture::CreateMultiLineTexture(const std::string & font, const std::string & text, int fontSize, SDL_Renderer* renderer, int x, int y, bool centerText, const uint8_t r, const uint8_t g, const uint8_t b)
+{
+    //Create texture for each line of text
+    std::list<Texture> lines;
+    std::string::size_type pos = 0;
+    std::string temp;
+    int width = 0;
+    int height = 0;
+    do
+    {
+        auto nextPos = text.find('\n', pos+1);
+        temp = (nextPos != std::string::npos) ? text.substr(pos, nextPos) : text.substr(pos);
+        pos = nextPos;
+
+        Texture t(font, temp, fontSize, renderer, 0, 0, false, r, g, b);
+        if(t.texture.get())
+        {
+            lines.push_back(t);
+            height += t.rect.h;
+            if(t.rect.w > width)
+                width = t.rect.w;
+        }
+    } while(pos++ != std::string::npos);
+
+    //Render each line of text onto a single texture
+    CreateRendableTexture(renderer, width, height, x, y, centerText);
+    auto oldRenderTarget = SDL_GetRenderTarget(renderer);
+    SetAsRenderTarget(renderer);
+    int texY = 0;
+    for(Texture & line : lines)
+    {
+        line.rect.y = texY;
+        texY += line.rect.h;
+        if(centerText)
+            line.rect.x = width/2 - line.rect.w/2;
+        line.Draw(renderer);
+    }
+    SDL_SetRenderTarget(renderer, oldRenderTarget);
+}
+
+void Texture::CreateRendableTexture(SDL_Renderer* renderer, int rectW, int rectH, int rectX, int rectY, bool center)
+{
+    rect = { (center) ? rectX-rectW/2 : rectX, (center) ? rectY-rectH/2 : rectY, rectW, rectH };
+    texture = std::shared_ptr<SDL_Texture>(SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET, rect.w, rect.h), SDL_DestroyTexture);
+    SDL_SetTextureBlendMode(texture.get(), SDL_BLENDMODE_BLEND);
 }
 
 void Texture::Draw(SDL_Renderer* renderer)
@@ -99,16 +154,43 @@ void Texture::Draw(SDL_Renderer* renderer, SDL_RendererFlip flip_enum)
       SDL_RenderCopyEx(renderer, texture.get(), NULL, &rect, 0, NULL, flip_enum);
 }
 
+void Texture::LoadImage(const std::string & imageFilePath, SDL_Renderer* renderer, bool updateRect)
+{
+    texture = std::shared_ptr<SDL_Texture>(LoadTextureImage(renderer, imageFilePath, (updateRect) ? &rect : nullptr), SDL_DestroyTexture);
+}
+
+void Texture::SetAsRenderTarget(SDL_Renderer* renderer)
+{
+    if(texture.get())
+    {
+        SDL_SetRenderTarget(renderer, texture.get());
+        SDL_RenderClear(renderer);
+    }
+}
+
+void Texture::SetPosition(int x, int y, bool center)
+{
+    rect.x = (center) ? x - rect.w/2 : x;
+    rect.y = (center) ? y - rect.h/2 : y;
+}
+
+void Texture::SetSize(int width, int height)
+{
+    rect.w = width;
+    rect.h = height;
+}
+
 void Sprite::Draw(SDL_Renderer * renderer)
 {
     SDL_RenderCopyEx(renderer, texture.get(), &sRect, &dRect, 0, NULL, SDL_FLIP_NONE);
 }
 
-SDL_Texture * LoadTextureImage(SDL_Renderer *renderer, const std::string & file, SDL_Rect & rect)
+SDL_Texture * LoadTextureImage(SDL_Renderer *renderer, const std::string & file, SDL_Rect * rect)
 {
     if(auto texture = IMG_LoadTexture(renderer, file.c_str()))
     {
-        SDL_QueryTexture(texture, NULL, NULL, &rect.w, &rect.h);
+        if(rect)
+            SDL_QueryTexture(texture, NULL, NULL, &rect->w, &rect->h);
         return texture;
     }
     std::cerr << "Cannot open image file: " << file << "\n";
