@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -8,18 +8,14 @@
   */
 
 #include "gamecontroller.h"
+#include <iostream>
 #include <string>
 #include <vector>
-#include <iostream>
 
 GameController::GameController(int id, std::vector<GameControllerEvent> & controllerEvents) : controllerEvents(controllerEvents)
 {
     this->id = id;
     controller = std::shared_ptr<SDL_GameController>(SDL_GameControllerOpen(id), SDL_GameControllerClose);
-    if(std::string(SDL_JoystickNameForIndex(id)).find("Sony Interactive Entertainment Controller") != std::string::npos)
-        mapJoystickToDpad = true;
-    else
-        mapJoystickToDpad = false;
     memset(buttonState, 0, sizeof(buttonState));
 }
 
@@ -31,6 +27,13 @@ GameController::~GameController()
 int GameController::GetId() const
 {
     return id;
+}
+
+uint8_t GameController::GetButtonState(int button) const
+{
+    if(button >= 0 && button < 15)
+        return buttonState[button].state;
+    return 0;
 }
 
 SDL_GameController* GameController::GetController() const
@@ -55,21 +58,17 @@ void GameController::processButtonState(bool newState, int buttonId)
 
 void GameController::Update()
 {
-    for(int i = 0; i < 15; ++i)
+    for(int i = 0; i < SDL_CONTROLLER_BUTTON_DPAD_UP; ++i)
     {
-        if(mapJoystickToDpad && i >= SDL_CONTROLLER_BUTTON_DPAD_UP && i <= SDL_CONTROLLER_BUTTON_DPAD_RIGHT)
-            continue;
-
         processButtonState(SDL_GameControllerGetButton(controller.get(), (SDL_GameControllerButton)i), i);
     }
 
-    if(mapJoystickToDpad)
-    {
-        int x = SDL_GameControllerGetAxis(controller.get(), SDL_CONTROLLER_AXIS_LEFTX);
-        processButtonState(x < 0, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
-        processButtonState(x > 0, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
-        int y = SDL_GameControllerGetAxis(controller.get(), SDL_CONTROLLER_AXIS_LEFTY);
-        processButtonState(y < 0, SDL_CONTROLLER_BUTTON_DPAD_UP);
-        processButtonState(y > 0, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
-    }
+    // Handle both analog and dpad input
+    constexpr int deadZone = 32767/2;
+    const int x = SDL_GameControllerGetAxis(controller.get(), SDL_CONTROLLER_AXIS_LEFTX);
+    processButtonState(SDL_GameControllerGetButton(controller.get(), SDL_CONTROLLER_BUTTON_DPAD_LEFT) || x < -deadZone, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+    processButtonState(SDL_GameControllerGetButton(controller.get(), SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || x > deadZone, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+    const int y = SDL_GameControllerGetAxis(controller.get(), SDL_CONTROLLER_AXIS_LEFTY);
+    processButtonState(SDL_GameControllerGetButton(controller.get(), SDL_CONTROLLER_BUTTON_DPAD_UP) || y < -deadZone, SDL_CONTROLLER_BUTTON_DPAD_UP);
+    processButtonState(SDL_GameControllerGetButton(controller.get(), SDL_CONTROLLER_BUTTON_DPAD_DOWN) || y > deadZone, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
 }

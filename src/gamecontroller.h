@@ -34,13 +34,13 @@ private:
     std::shared_ptr<SDL_GameController> controller;
     std::vector<GameControllerEvent> & controllerEvents;
     GameButtonState buttonState[15];
-    bool mapJoystickToDpad;
     int id;
     void processButtonState(bool newState, int buttonId);
 public:
     GameController(int id, std::vector<GameControllerEvent> & controllerEvents);
     ~GameController();
     int GetId() const;
+    uint8_t GetButtonState(int button) const;
     SDL_GameController* GetController() const;
     void Update();
 };
