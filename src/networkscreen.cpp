@@ -1,8 +1,23 @@
+/**
+  * Copyright (C) 2018-2019 CompCom
+  *
+  * This program is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public License
+  * as published by the Free Software Foundation; either version 3
+  * of the License, or (at your option) any later version.
+  */
+ 
 #include "edittextscreen.h"
-#include "networkscreen.h"
+#include "gamebutton.h"
+#include "guihelper.h"
+#include "languagemanager.h"
+#include "menuitems/genericmenuentry.h"
+#include "menuitems/messagebox.h"
+#include "menuitems/vitemscrollcollection.h"
 #include "menuscreenmanager.h"
-#include "wpa/os.h"
+#include "networkscreen.h"
 #include "wpa/wpa_ctrl.h"
+#include "wpa/wpa_passphrase.h"
 #include <experimental/filesystem>
 #include <fstream>
 #include <iostream>
@@ -12,6 +27,12 @@
 using namespace std::chrono_literals;
 
 namespace fs = std::experimental::filesystem;
+
+#ifdef SEGA
+constexpr GameButton ConnectBtn = GameButtons[GAME_BUTTON_SEGA_A], RemoveBtn = GameButtons[GAME_BUTTON_SEGA_C], ScanBtn = GameButtons[GAME_BUTTON_SEGA_START], BackBtn = GameButtons[GAME_BUTTON_SEGA_B];
+#else
+constexpr GameButton ConnectBtn = GameButtons[GAME_BUTTON_X], RemoveBtn = GameButtons[GAME_BUTTON_SQUARE], ScanBtn = GameButtons[GAME_BUTTON_TRIANGLE], BackBtn = GameButtons[GAME_BUTTON_O];
+#endif // SEGA
 
 void run_wpa_command(wpa_ctrl* ctrl, const std::string & cmd, std::list<std::string> * result = nullptr)
 {
@@ -50,7 +71,7 @@ std::string run_wpa_command_return_value(wpa_ctrl* ctrl, const std::string & cmd
     return std::string();
 }
 
-NetworkScreen::NetworkScreen() : ctrl(nullptr), isConnecting(0), statusCheckTime(std::chrono::system_clock::now())
+NetworkScreen::NetworkScreen() : ctrl(nullptr), isConnecting(false), statusCheckTime(std::chrono::system_clock::now())
 {
 }
 NetworkScreen::~NetworkScreen()
@@ -61,13 +82,20 @@ NetworkScreen::~NetworkScreen()
 
 void NetworkScreen::Init()
 {
-    textures.emplace_back(manager->GetBackground());
-    statusBg = textures.insert(textures.end(), Texture());
+    GuiHelper & guiHelper = GuiHelper::GetInstance();
+    textures.push_back(guiHelper.GetTexture(BACKGROUND));
+    textures.push_back(guiHelper.GetTexture(FOOTER));
+    guiHelper.CreateFooterItems({
+                                    {ConnectBtn.GUI_Value, LanguageManager::GetString("connect")},
+                                    {RemoveBtn.GUI_Value, LanguageManager::GetString("remove")},
+                                    {ScanBtn.GUI_Value, LanguageManager::GetString("scan")},
+                                    {BackBtn.GUI_Value, LanguageManager::GetString("back")}
+                                },
+                                textures);
+    removeNetworkTexture = std::prev(textures.end(), 3);
+    textures.insert(textures.end(), guiHelper.GetTexture(GuiElement::LINE_BREAK))->SetPosition(640, 568, true);
     statusTexture = textures.insert(textures.end(), Texture());
-    textures.emplace_back(fontBold, "X - Connect to Network", 16, renderer, 1280*.3, 660, true);
-    removeNetworkTexture = textures.insert(textures.end(), Texture(fontBold, u8"\u25A0 - Remove Network", 16, renderer, 1280*.5, 660, true));
-    textures.emplace_back(fontBold, u8"\u25B2 - Rescan Networks", 16, renderer, 1280*.7, 660, true);
-
+    textures.push_back(guiHelper.CreateTitleTexture(LanguageManager::GetString("nm_title"), 640, 72));
     if(system("ip link set wlan0 up") != 0)
     {
         manager->DisplayErrorScreen("Cannot detect wireless adapter.", true);
@@ -96,38 +124,42 @@ void NetworkScreen::Init()
     }
 
     collection = std::make_shared<VItemScrollCollection>();
-    collection->displayItemCount = 24;
+    collection->displayItemCount = 7;
+    collection->yOffset = 64;
+    collection->y = 150;
+    //Arrow Pos = center screen + half generic entry size + spacer
+    collection->setArrowPosition(640+335+30);
     items.push_back(collection);
     scan();
     checkStatus();
 }
 void NetworkScreen::Update()
 {
-    //Hacky method to only modify items within main thread.
-    if(isConnecting.load() == 2)
-    {
-        items.erase(--items.end());
-        isConnecting = 0;
-        if(run_wpa_command_return_value(ctrl, "SAVE_CONFIG").compare("OK") != 0)
-            manager->DisplayErrorScreen("Failed to save network config.");
-    }
-    else if(isConnecting.load() == 0 && (std::chrono::system_clock::now()-statusCheckTime) >= 1s)
+    if(isConnecting.load() == false && (std::chrono::system_clock::now()-statusCheckTime) >= 1s)
         checkStatus();
+    else
+        items[selectedItem]->Update();
 
     MenuScreen::Update();
 }
 
 void NetworkScreen::checkStatus()
 {
+    std::string connectStatus = "N/A", ipAddress = "N/A", ssid = "N/A";
     std::list<std::string> result;
-    std::string status;
     run_wpa_command(ctrl, "STATUS", &result);
-    for(const auto & line : result)
+    for(const std::string & line : result)
     {
-        status += line;
-        status += '\n';
+        std::string variable = line.substr(0, line.find('='));
+        if(variable.compare("ssid") == 0)
+            ssid = line.substr(line.find('=')+1);
+        else if(variable.compare("wpa_state") == 0)
+            connectStatus = line.substr(line.find('=')+1);
+        else if(variable.compare("ip_address") == 0)
+            ipAddress = line.substr(line.find('=')+1);
     }
-    *statusTexture = Texture(font, status, 16, renderer, 1280*.6, 720*.4);
+    std::string status = "SSID: " + ssid + "    " + LanguageManager::GetString("status") + ": " + connectStatus + "    IP ADDRESS: " + ipAddress;
+    *statusTexture = FontManager::CreateTexture(TextItemType::DEFAULT_TEXT, status, 16, 640, 598, true);
     statusCheckTime = std::chrono::system_clock::now();
 }
 
@@ -151,7 +183,15 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
             }
             if(password.size())
             {
-                if(run_wpa_command_return_value(ctrl, "SET_NETWORK " + netIdString + " psk \"" + password + "\"").compare("OK") != 0)
+                std::string psk;
+                try
+                {
+                    if(password.size() >= 8 && password.size() <= 63)
+                        wpa_passphrase(ssid, password, psk);
+                }
+                catch(...) {}
+
+                if(psk.size() == 0 || run_wpa_command_return_value(ctrl, "SET_NETWORK " + netIdString + " psk " + psk).compare("OK") != 0)
                 {
                     run_wpa_command(ctrl, "REMOVE_NETWORK " + netIdString);
                     manager->DisplayErrorScreen("Failed to set network password.");
@@ -163,11 +203,20 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
             auto msgBox = std::make_shared<MessageBox>("Information", "Attempting to connect to network.", renderer);
             items.push_back(msgBox);
             msgBox->setPosition(640,360);
+            msgBox->backgroundTask = std::async(std::launch::async, [this,ssid]() { enableNetwork(ssid); } );
+            msgBox->endFunction = [this, prevSelectedItem=selectedItem]()
+                                    {
+                                        items.erase(--items.end());
+                                        selectedItem = prevSelectedItem;
+                                        isConnecting = false;
+                                        if(run_wpa_command_return_value(ctrl, "SAVE_CONFIG").compare("OK") != 0)
+                                            manager->DisplayErrorScreen("Failed to save network config.");
+                                    };
 
-            isConnecting = 1;
-            connectThread = std::async(std::launch::async, [this,ssid]() { enableNetwork(ssid); } );
+            isConnecting = true;
+            selectedItem = items.size()-1;
         };
-        manager->AddNewScreen(std::make_shared<EditTextScreen>("Enter Password", nullptr, callback));
+        manager->AddNewScreen<EditTextScreen>("ENTER PASSWORD", nullptr, callback);
 
         return;
     }
@@ -175,9 +224,18 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
     auto msgBox = std::make_shared<MessageBox>("Information", "Attempting to connect to network.", renderer);
     items.push_back(msgBox);
     msgBox->setPosition(640,360);
+    msgBox->backgroundTask = std::async(std::launch::async, [this,ssid]() { enableNetwork(ssid); } );
+    msgBox->endFunction = [this, prevSelectedItem=selectedItem]()
+                            {
+                                items.erase(--items.end());
+                                selectedItem = prevSelectedItem;
+                                isConnecting = false;
+                                if(run_wpa_command_return_value(ctrl, "SAVE_CONFIG").compare("OK") != 0)
+                                    manager->DisplayErrorScreen("Failed to save network config.");
+                            };
 
-    isConnecting = 1;
-    connectThread = std::async(std::launch::async, [this,ssid]() { enableNetwork(ssid); } );
+    isConnecting = true;
+    selectedItem = items.size()-1;
 }
 
 void NetworkScreen::enableNetwork(const std::string & ssid)
@@ -213,14 +271,14 @@ void NetworkScreen::handleButtonPress(const GameControllerEvent * event)
 
     switch(event->button)
     {
-    case SDL_CONTROLLER_BUTTON_B:
+    case BackBtn.SDL_Value:
         if(event->state == 1)
         {
             manager->RemoveCurrentScreen();
             return;
         }
         break;
-    case SDL_CONTROLLER_BUTTON_Y:
+    case ScanBtn.SDL_Value:
         if(event->state == 1)
             scan();
         break;
@@ -259,11 +317,18 @@ void NetworkScreen::scan()
     for(int i = 0; i < 30; ++i)
         networkList.push_back("Network" + std::to_string(i));
 #endif
+
+    GuiHelper & guiHelper = GuiHelper::GetInstance();
+
     for(const auto & network : networkList)
     {
-        AdvancedPushButtonPtr networkButton = std::make_shared<AdvancedPushButton>(network, 16, renderer, 0, 0);
-        networkButton->onPress[SDL_CONTROLLER_BUTTON_A] = std::bind(&NetworkScreen::connectToNetwork, this, network);
-        networkButton->onPress[SDL_CONTROLLER_BUTTON_X] = std::bind(&NetworkScreen::removeNetwork, this, network);
+        if(network.size() == 0)
+            continue;
+        
+        GenericMenuEntryPtr networkButton = std::make_shared<GenericMenuEntry>(guiHelper.GetTexture(GuiElement::LIST_NORMAL), guiHelper.GetTexture(GuiElement::LIST_FOCUS), 440);
+        networkButton->SetLeft(network);
+        networkButton->onPress[ConnectBtn.SDL_Value] = std::bind(&NetworkScreen::connectToNetwork, this, network);
+        networkButton->onPress[RemoveBtn.SDL_Value] = std::bind(&NetworkScreen::removeNetwork, this, network);
         networkButton->onEnter = std::bind(&NetworkScreen::updateIcons, this, network);
         collection->addItem(std::dynamic_pointer_cast<MenuItem>(networkButton));
     }
@@ -273,10 +338,10 @@ void NetworkScreen::updateIcons(const std::string & ssid)
 {
     if(networks.count(ssid))
     {
-        SDL_SetTextureColorMod(removeNetworkTexture->texture.get(), 0xFF, 0xFF, 0xFF);
+        SDL_SetTextureAlphaMod(removeNetworkTexture->texture.get(), 0xFF);
     }
     else
     {
-        SDL_SetTextureColorMod(removeNetworkTexture->texture.get(), 0x80, 0x80, 0x80);
+        SDL_SetTextureAlphaMod(removeNetworkTexture->texture.get(), 0x80);
     }
 }

@@ -7,35 +7,36 @@
   * of the License, or (at your option) any later version.
   */
 
+#include "bootitem.h"
+#include "font.h"
+#include "guihelper.h"
+#include "languagemanager.h"
+#include "loadscreen.h"
 #include "menuscreenmanager.h"
 #include "mainscreen.h"
 #include "settings.h"
 #include <iostream>
-#include <vector>
-#include <algorithm>
-#include <list>
-#include <string>
-#include <SDL_mixer.h>
-#include <experimental/filesystem>
 
-#define BOOT_MENU_VERSION "0.8.0"
+#define BOOT_MENU_VERSION "1.0.0"
 
 namespace fs = std::experimental::filesystem;
 
-fs::path imageFolder("images");
-fs::path themeFolder;
+fs::path boot_menu_folder = "./";
+std::string musicFolder;
 
 int main(int argc, char * argv[])
 {
     SDL_Context sdl_context(std::chrono::milliseconds(16));
+    GuiHelper & guiHelper = GuiHelper::GetInstance();
 
     //Check arguments
-    std::string musicFolder;
+    bool autoBoot = false;
+    std::string languageFile;
     for(int i = 1; i < argc; ++i)
     {
         if(strcasecmp(argv[i], "--image-folder") == 0)
         {
-            imageFolder = argv[i+1];
+            guiHelper.SetImageFolder(argv[i+1]);
             ++i;
         }
         else if(strcasecmp(argv[i], "--music-folder") == 0)
@@ -45,7 +46,7 @@ int main(int argc, char * argv[])
         }
         else if(strcasecmp(argv[i], "--theme-folder") == 0)
         {
-            themeFolder = argv[i+1];
+            guiHelper.SetThemeFolder(argv[i+1]);
             ++i;
         }
         else if(strcasecmp(argv[i], "--cfg-file") == 0)
@@ -63,6 +64,20 @@ int main(int argc, char * argv[])
             uiThemesFolder = argv[i+1];
             ++i;
         }
+        else if(strcasecmp(argv[i], "--language-file") == 0)
+        {
+            languageFile = argv[i+1];
+            ++i;
+        }
+        else if(strcasecmp(argv[i], "--boot-menu-folder") == 0)
+        {
+            boot_menu_folder = argv[i+1];
+            ++i;
+        }
+        else if(strcasecmp(argv[i], "--auto-boot") == 0)
+        {
+            autoBoot = true;
+        }
         else if(strcasecmp(argv[i], "--version") == 0)
         {
             std::cout << "PSC Boot Menu by CompCom version " << BOOT_MENU_VERSION << std::endl;
@@ -70,35 +85,58 @@ int main(int argc, char * argv[])
         }
     }
 
-    //Init Audio
-    SDL_Init(SDL_INIT_AUDIO);
-    Mix_OpenAudio(44100,MIX_DEFAULT_FORMAT,2,1024);
-
-    if(musicFolder.size())
-    {
-        std::string wavFilePath;
-        if(fs::exists(themeFolder/"bootmenu.wav"))
-            wavFilePath = themeFolder/"bootmenu.wav";
-        else if(fs::exists(musicFolder+"/bootmenu.wav"))
-            wavFilePath = musicFolder+"/bootmenu.wav";
-
-        if(wavFilePath.size())
-        {
-            Mix_Chunk* wav = Mix_LoadWAV(wavFilePath.c_str());
-            if(!wav || Mix_PlayChannel(-1, wav, -1) == -1)
-                std::cerr << Mix_GetError() << std::endl;
-        }
-        else
-            std::cerr << "Cannot open file: bootmenu.wav" << std::endl;
-    }
+    //Populate default language file path
+    if(languageFile.size() == 0)
+        languageFile = boot_menu_folder/"languages/ENG.json";
 
     MenuScreenManager manager(&sdl_context);
-    manager.AddNewScreen(std::make_shared<MainScreen>());
+    guiHelper.AttachRenderer(sdl_context.renderer);
+
+    //Load Boot Items and sort them into correct order.
+    std::list<std::unique_ptr<BootItem>> bootItems = GetBootItems(boot_menu_folder/"boot_items");
+    bootItems.sort([](const std::unique_ptr<BootItem> & a, const std::unique_ptr<BootItem> & b) { return a->filename < b->filename; });
+
+    //Load Fonts, Language and then handle auto booting or booting to main screen
+    if(FontManager::GetInstance().LoadFonts() == false)
+    {
+        std::cerr << "Failed to load fonts." << std::endl;
+        manager.DisplayErrorScreen("Failed to load font JSON.", false);
+    }
+    else if(LanguageManager::LoadLanguage(languageFile) == false)
+    {
+        std::cerr << "Failed to load language." << std::endl;
+        manager.DisplayErrorScreen("Failed to load language JSON.", false);
+    }
+    else
+    {
+        if(bootItems.size() == 0)
+        {
+            manager.DisplayErrorScreen("No menu items found.", false);
+        }
+        else
+        {
+            BootItem * autoBootItem = nullptr;
+            if(autoBoot)
+            {
+                for(const auto & bootItem : bootItems)
+                {
+                    if(bootItem->autoBoot)
+                    {
+                        autoBootItem = bootItem.get();
+                        break;
+                    }
+                }
+            }
+
+            if(autoBootItem)
+                manager.AddNewScreen<LoadScreen>(bootItems, autoBootItem);
+            else
+                manager.AddNewScreen<MainScreen>(bootItems);
+        }
+    }
 
     while(manager.ScreenAvailable())
         manager.Run();
-
-    Mix_CloseAudio();
 
     return 0;
 }

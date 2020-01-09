@@ -1,21 +1,35 @@
+/**
+  * Copyright (C) 2018-2019 CompCom
+  *
+  * This program is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public License
+  * as published by the Free Software Foundation; either version 3
+  * of the License, or (at your option) any later version.
+  */
+ 
+#include "menuitems/pushbutton.h"
 #include "menuscreenmanager.h"
 #include "menuscreen.h"
 #include "warningscreen.h"
 
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 #include <experimental/filesystem>
 
+#ifdef SEGA
+#include <fcntl.h>
+#include <fstream>
+#include <unistd.h>
+#include <linux/input.h>
+#endif
+
 namespace fs = std::experimental::filesystem;
+extern fs::path boot_menu_folder;
 
 MenuScreenManager::MenuScreenManager(SDL_Context * sdl_context) : sdl_context(*sdl_context)
 {
     //Load SDL Game Controller Mappings
-#ifdef __arm__
-    std::string game_mapping_file("/media/bleemsync/etc/boot_menu/gamecontrollerdb.txt");
-#else
-    std::string game_mapping_file("gamecontrollerdb.txt");
-#endif // __arm__
+    fs::path game_mapping_file = boot_menu_folder/"gamecontrollerdb.txt";
     if(fs::exists(game_mapping_file))
         SDL_GameControllerAddMappingsFromFile(game_mapping_file.c_str());
 
@@ -29,15 +43,21 @@ MenuScreenManager::MenuScreenManager(SDL_Context * sdl_context) : sdl_context(*s
     SDL_PumpEvents();
     SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
 
-    //Load Background image
-#ifdef __arm__
-    background = Texture("/usr/sony/share/data/images/GR/JP_US_BG.png", sdl_context->renderer);
-#else
-    background = Texture("./root/usr/sony/share/data/images/GR/JP_US_BG.png", sdl_context->renderer);
-#endif // __arm__
+    sdl_context->StartFrame();
+    sdl_context->EndFrame();
+
+#ifdef SEGA
+    // Find and open input event file for sega power button input
+    openPowerButtonEventFile();
+#endif
 }
 MenuScreenManager::~MenuScreenManager()
-{}
+{
+#ifdef SEGA
+    if(powerFd != -1)
+        close(powerFd);
+#endif
+}
 
 void MenuScreenManager::AddNewScreen(const std::shared_ptr<MenuScreen> & screen)
 {
@@ -45,6 +65,7 @@ void MenuScreenManager::AddNewScreen(const std::shared_ptr<MenuScreen> & screen)
     screens.push_back(screen);
     screen->AttachManager(this);
     screen->Init();
+    sdl_context.ResetTimer();
 }
 
 void MenuScreenManager::RemoveCurrentScreen()
@@ -66,6 +87,34 @@ bool MenuScreenManager::ScreenAvailable() const
 
 void MenuScreenManager::Update()
 {
+#ifdef SEGA
+    /* 
+        If sega power gpio event file has been opened successfully
+        scan input events for power or reset(home) button presses
+    */ 
+    if(powerFd != -1)
+    {
+        input_event e;
+        if(read(powerFd, &e, sizeof(input_event)) > 0)
+        {
+            if(e.type == 1)
+            {
+                if(e.code == KEY_POWER)
+                {
+                    system("echo -n \"shutdown-detection 1\" > /tmp/launchfilecommand");
+                    screens.clear();
+                    return;
+                }
+                else if(e.code == KEY_HOME)
+                {
+                    system("echo -n restart > /tmp/launchfilecommand");
+                    screens.clear();
+                    return;
+                }
+            }
+        }
+    }
+#endif
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
         if(screens.size() && screens.back()->HandleSDLEvent(&e))
@@ -113,9 +162,9 @@ void MenuScreenManager::DisplayErrorScreen(const std::string & error, bool remov
     if(removeCurrentScreen)
         RemoveCurrentScreen();
 
-    PushButtonPtr okayButton = std::make_shared<PushButton>("OK", 28, sdl_context.renderer, 640, 560);
+    PushButtonPtr okayButton = std::make_shared<PushButton>("OK", 28, 640, 560);
     okayButton->onPress = std::bind(&MenuScreenManager::RemoveCurrentScreen, this);
-    AddNewScreen(std::make_shared<WarningScreen>(error, okayButton, true));
+    AddNewScreen<WarningScreen>(error, okayButton, true);
 }
 
 void MenuScreenManager::addRemoveController(SDL_Event & e)
@@ -143,11 +192,6 @@ void MenuScreenManager::updateControllers()
         controller->Update();
 }
 
-const Texture & MenuScreenManager::GetBackground() const
-{
-    return background;
-}
-
 SDL_Renderer * MenuScreenManager::GetRenderer() const
 {
     return sdl_context.renderer;
@@ -157,3 +201,34 @@ std::vector<GameControllerEvent> & MenuScreenManager::GetControllerEvents()
 {
     return controllerEvents;
 }
+
+const std::vector<GameControllerPtr> & MenuScreenManager::GetControllers() const
+{
+    return controllers;
+}
+
+#ifdef SEGA
+void MenuScreenManager::openPowerButtonEventFile()
+{
+    for(auto & entry : fs::directory_iterator("/dev/input/"))
+    {
+        std::string name = entry.path().filename();
+        if(name.find("event") != std::string::npos)
+        {
+            std::ifstream in("/sys/class/input/"+name+"/device/name");
+            if(in.good())
+            {
+                std::string temp;
+                std::getline(in, temp);
+                in.close();
+                if(temp.compare("gpio-keys") == 0)
+                {
+                    powerFd = open(("/dev/input/"+name).c_str(), O_RDONLY | O_NONBLOCK);
+                    return;
+                }
+            }
+        }
+    }
+    powerFd = -1;
+}
+#endif

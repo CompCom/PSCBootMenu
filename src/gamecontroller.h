@@ -12,9 +12,8 @@
 
 #include <memory>
 #include <chrono>
-#include <vector>
-
 #include <SDL.h>
+#include <vector>
 
 struct GameControllerEvent
 {

@@ -1,5 +1,15 @@
-#include "warningscreen.h"
+/**
+  * Copyright (C) 2018-2019 CompCom
+  *
+  * This program is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public License
+  * as published by the Free Software Foundation; either version 3
+  * of the License, or (at your option) any later version.
+  */
+ 
+#include "font.h"
 #include "menuscreenmanager.h"
+#include "warningscreen.h"
 #include <iostream>
 
 WarningScreen::WarningScreen(const std::string & warningText, const MenuItemPtr & item, bool isError) : warningText(warningText), isError(isError)
@@ -14,6 +24,6 @@ WarningScreen::~WarningScreen()
 }
 void WarningScreen::Init()
 {
-    textures.emplace_back(fontBold, (isError) ? "ERROR!" : "WARNING!", 48, renderer, 640, 80, true, 0xFF, 0 ,0);
-    textures.emplace_back(font, warningText, 28, renderer, 640, 360, true);
+    textures.push_back(FontManager::CreateTexture(TextItemType::WARNING_HEADER_TEXT, (isError) ? "ERROR!" : "WARNING!", 48, 640, 80, true));
+    textures.push_back(FontManager::CreateTexture(TextItemType::DEFAULT_TEXT, warningText, 28, 640, 360, true));
 }

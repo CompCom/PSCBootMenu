@@ -1,18 +1,44 @@
-#include "settings.h"
+/**
+  * Copyright (C) 2018-2019 CompCom
+  *
+  * This program is free software; you can redistribute it and/or
+  * modify it under the terms of the GNU General Public License
+  * as published by the Free Software Foundation; either version 3
+  * of the License, or (at your option) any later version.
+  */
+ 
+#include "gamebutton.h"
+#include "guihelper.h"
+#include "languagemanager.h"
+#include "menuitems/booltoggle.h"
+#include "menuitems/itemcollection.h"
+#include "menuitems/pushbutton.h"
+#include "menuitems/themetoggle.h"
+#include "menuitems/vitemscrollcollection.h"
 #include "menuscreenmanager.h"
+#include "settings.h"
 #include "warningscreen.h"
 #include "json.hpp"
-#include <iostream>
-#include <fstream>
 #include <algorithm>
+#include <fstream>
+#include <iostream>
 #include <list>
 #include <set>
 
+namespace fs = std::experimental::filesystem;
 using json = nlohmann::json;
+
+extern fs::path boot_menu_folder;
 
 std::string cfgLocation;
 std::string defaultCfgLocation;
 std::string uiThemesFolder;
+
+#ifdef SEGA
+constexpr GameButton SaveBtn = GameButtons[GAME_BUTTON_SEGA_START], ToggleBtn = GameButtons[GAME_BUTTON_SEGA_A], BackBtn = GameButtons[GAME_BUTTON_SEGA_B];
+#else
+constexpr GameButton SaveBtn = GameButtons[GAME_BUTTON_START], ToggleBtn = GameButtons[GAME_BUTTON_X], BackBtn = GameButtons[GAME_BUTTON_O];
+#endif // SEGA
 
 SettingsScreen::SettingsScreen()
 {
@@ -43,6 +69,13 @@ void SettingsScreen::Init()
         return;
     }
 
+    VItemScrollCollectionPtr container = std::make_shared<VItemScrollCollection>();
+    container->displayItemCount = 6;
+    container->yOffset = 64;
+    container->y = 190;
+    container->setArrowPosition(640+335+30);
+    items.push_back(container);
+
     std::string temp;
     while(std::getline(in, temp))
     {
@@ -56,9 +89,15 @@ void SettingsScreen::Init()
             if(variableTypeIter != variableTypeMap.end())
             {
                 if(variableTypeIter->second.compare("bool") == 0)
-                    bool_variables[var_name] = std::make_shared<BoolToggle>(var_name, value.compare("\"1\"") == 0, renderer);
+                {
+                    bool_variables[var_name] = std::make_shared<BoolToggle>(LanguageManager::GetString(var_name), value.compare("\"1\"") == 0);
+                    container->addItem(bool_variables[var_name]);
+                }
                 else if(variableTypeIter->second.compare("theme") == 0 && uiThemesFolder.size())
-                    theme_variable = std::make_shared<ThemeToggle>(renderer, var_name, value);
+                {
+                    theme_variable = std::make_shared<ThemeToggle>(LanguageManager::GetString(var_name), value);
+                    container->addItem(theme_variable);
+                }
                 else
                     unk_variables[var_name] = value;
             }
@@ -88,7 +127,7 @@ void SettingsScreen::Init()
                 if(variableTypeIter != variableTypeMap.end())
                 {
                     if(variableTypeIter->second.compare("bool") == 0)
-                        bool_variables[var_name]->value = value.compare("\"1\"") == 0;
+                        bool_variables[var_name]->UpdateSlider(value.compare("\"1\"") == 0);
                     else if(variableTypeIter->second.compare("theme") == 0 && uiThemesFolder.size())
                         theme_variable->setSelectedValue(value);
                     else
@@ -101,48 +140,62 @@ void SettingsScreen::Init()
         in.close();
     }
 
-    trueTexture = Texture(font, "TRUE", 16, renderer);
-    falseTexture = Texture(font, "FALSE", 16, renderer);
+    GuiHelper & guiHelper = GuiHelper::GetInstance();
+    textures.push_back(guiHelper.GetTexture(BACKGROUND));
+    textures.push_back(guiHelper.GetTexture(FOOTER));
+    guiHelper.CreateFooterItems({
+                                    {SaveBtn.GUI_Value, LanguageManager::GetString("save_reset")},
+                                    {ToggleBtn.GUI_Value, LanguageManager::GetString("toggle")},
+                                    {BackBtn.GUI_Value, LanguageManager::GetString("back")},
+                                    //{GuiElement::TRIANGLE_BUTTON, "Restore Defaults"}
+                                },
+                                textures);
+    textures.push_back(guiHelper.CreateTitleTexture(LanguageManager::GetString("set_title"), 640, 72));
 
-    ItemCollectionPtr container = std::make_shared<ItemCollection>();
-    for(auto & item : bool_variables)
-        container->addItem(item.second);
-    if(uiThemesFolder.size())
-        container->addItem(theme_variable);
-    items.push_back(container);
+    for(int i = 0; i < 6; ++i)
+        textures.insert(textures.end(), guiHelper.GetTexture(GuiElement::LINE_BREAK))->SetPosition(640, container->y+32+64*i, true);
+}
 
-    HItemCollectionPtr saveContainer = std::make_shared<HItemCollection>();
-    items.push_back(saveContainer);
-    PushButtonPtr cancel = std::make_shared<PushButton>("CANCEL", 16, renderer, 740, 660);
-    cancel->onPress = std::bind(&MenuScreenManager::RemoveCurrentScreen, manager);
-    saveContainer->items.push_back(cancel);
-
-    PushButtonPtr save = std::make_shared<PushButton>("SAVE", 16, renderer, 540, 660);
-    save->onPress = [&,this]()
+void SettingsScreen::handleButtonPress(const GameControllerEvent * event)
+{
+    switch(event->button)
     {
-        HItemCollectionPtr container = std::make_shared<HItemCollection>();
+    case BackBtn.SDL_Value:
+        if(event->state == 1)
+        {
+            manager->RemoveCurrentScreen();
+            return;
+        }
+        break;
+    case SaveBtn.SDL_Value:
+        if(event->state == 1)
+        {
+            ItemCollectionPtr container = std::make_shared<ItemCollection>();
+            container->collectionType = ItemCollection::HORIZONTAL;
 
-        PushButtonPtr no = std::make_shared<PushButton>("NO", 28, renderer, 740, 560);
-        no->onPress = std::bind(&MenuScreenManager::RemoveCurrentScreen, manager);
-        container->items.push_back(no);
-        PushButtonPtr yes = std::make_shared<PushButton>("YES", 28, renderer, 540, 560);
-        yes->onPress = [&,this]() { this->saveConfig(); manager->RemoveAllScreens(); };
-        container->items.push_back(yes);
-
-        manager->AddNewScreen(std::make_shared<WarningScreen>("       Are you sure you want to overwrite the old settings?\n                Console will shut down after saving.", container));
-    };
-    saveContainer->items.push_back(save);
-
-    textures.emplace_back(fontBold, "BleemSync Settings", 36, renderer, 640, 80, true);
+            PushButtonPtr no = std::make_shared<PushButton>("NO", 28, 740, 560);
+            no->onPress = std::bind(&MenuScreenManager::RemoveCurrentScreen, manager);
+            container->items.push_back(no);
+            PushButtonPtr yes = std::make_shared<PushButton>("YES", 28, 540, 560);
+            container->items.push_back(yes);
+#ifdef SEGA
+            yes->onPress = [this]() { this->saveConfig(); manager->RemoveAllScreens(); system("echo -n restart > /tmp/launchfilecommand"); };
+            manager->AddNewScreen<WarningScreen>("Are you sure you want to overwrite the old settings?\nConsole will restart after saving.", container);
+#else
+            yes->onPress = [this]() { this->saveConfig(); manager->RemoveAllScreens(); };
+            manager->AddNewScreen<WarningScreen>("Are you sure you want to overwrite the old settings?\nConsole will shut down after saving.", container);
+#endif
+        }
+        break;
+    default:
+        MenuScreen::handleButtonPress(event);
+        break;
+    }
 }
 
 bool SettingsScreen::loadVariableTypes()
 {
-#ifdef __arm__
-    std::ifstream in("/media/bleemsync/etc/boot_menu/modifiable_variables.json");
-#else
-    std::ifstream in("modifiable_variables.json");
-#endif // __arm__
+    std::ifstream in(boot_menu_folder/"modifiable_variables.json");
 
     if(in.is_open() == false)
     {
