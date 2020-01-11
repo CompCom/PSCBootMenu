@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -200,32 +200,24 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
             }
             networks[ssid] = netId;
 
-            auto msgBox = std::make_shared<MessageBox>("Information", "Attempting to connect to network.", renderer);
-            items.push_back(msgBox);
-            msgBox->setPosition(640,360);
-            msgBox->backgroundTask = std::async(std::launch::async, [this,ssid]() { enableNetwork(ssid); } );
-            msgBox->endFunction = [this, prevSelectedItem=selectedItem]()
-                                    {
-                                        items.erase(--items.end());
-                                        selectedItem = prevSelectedItem;
-                                        isConnecting = false;
-                                        if(run_wpa_command_return_value(ctrl, "SAVE_CONFIG").compare("OK") != 0)
-                                            manager->DisplayErrorScreen("Failed to save network config.");
-                                    };
-
-            isConnecting = true;
-            selectedItem = items.size()-1;
+            createConnectingMessageBox(ssid);
         };
         manager->AddNewScreen<EditTextScreen>("ENTER PASSWORD", nullptr, callback);
 
         return;
     }
 
+    createConnectingMessageBox(ssid);
+}
+
+void NetworkScreen::createConnectingMessageBox(const std::string & ssid)
+{
+    isConnecting = true;
     auto msgBox = std::make_shared<MessageBox>("Information", "Attempting to connect to network.", renderer);
     items.push_back(msgBox);
     msgBox->setPosition(640,360);
     msgBox->backgroundTask = std::async(std::launch::async, [this,ssid]() { enableNetwork(ssid); } );
-    msgBox->endFunction = [this, prevSelectedItem=selectedItem]()
+    msgBox->endFunction =   [this, prevSelectedItem=selectedItem]()
                             {
                                 items.erase(--items.end());
                                 selectedItem = prevSelectedItem;
@@ -233,8 +225,6 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
                                 if(run_wpa_command_return_value(ctrl, "SAVE_CONFIG").compare("OK") != 0)
                                     manager->DisplayErrorScreen("Failed to save network config.");
                             };
-
-    isConnecting = true;
     selectedItem = items.size()-1;
 }
 
@@ -260,8 +250,6 @@ void NetworkScreen::enableNetwork(const std::string & ssid)
         kill(udhcpcPid, SIGUSR1);
     else
         system("udhcpc -R -x hostname:\"$HOSTNAME\" -t 5 -n -p /var/run/udhcpc.wlan0.pid -i wlan0");
-
-    isConnecting = 2;
 }
 
 void NetworkScreen::handleButtonPress(const GameControllerEvent * event)

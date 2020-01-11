@@ -29,6 +29,7 @@ public:
 private:
     void checkStatus();
     void connectToNetwork(const std::string & ssid);
+    void createConnectingMessageBox(const std::string & ssid);
     void enableNetwork(const std::string & ssid);
     void handleButtonPress(const GameControllerEvent * event) override;
     void removeNetwork(const std::string & ssid);
