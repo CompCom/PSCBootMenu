@@ -32,6 +32,7 @@ private:
     void createConnectingMessageBox(const std::string & ssid);
     void enableNetwork(const std::string & ssid);
     void handleButtonPress(const GameControllerEvent * event) override;
+    void populateNetworks();
     void removeNetwork(const std::string & ssid);
     void scan();
     void updateIcons(const std::string & ssid);

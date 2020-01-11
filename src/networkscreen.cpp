@@ -34,8 +34,10 @@ constexpr GameButton ConnectBtn = GameButtons[GAME_BUTTON_SEGA_A], RemoveBtn = G
 constexpr GameButton ConnectBtn = GameButtons[GAME_BUTTON_X], RemoveBtn = GameButtons[GAME_BUTTON_SQUARE], ScanBtn = GameButtons[GAME_BUTTON_TRIANGLE], BackBtn = GameButtons[GAME_BUTTON_O];
 #endif // SEGA
 
-void run_wpa_command(wpa_ctrl* ctrl, const std::string & cmd, std::list<std::string> * result = nullptr)
+static std::mutex wpa_mutex;
+void run_wpa_command(wpa_ctrl* ctrl, const std::string & cmd, std::list<std::string> * result = nullptr, bool logResult = true)
 {
+    std::lock_guard<std::mutex> _lock(wpa_mutex);
     char buffer[4096] = {0};
     size_t bufferSize = 4095;
     int wpa_result = wpa_ctrl_request(ctrl, cmd.c_str(), cmd.size(), buffer, &bufferSize, NULL);
@@ -47,8 +49,11 @@ void run_wpa_command(wpa_ctrl* ctrl, const std::string & cmd, std::list<std::str
         return;
     }
     buffer[bufferSize] = '\0';
-    std::cout << "WPA COMMAND: " << cmd << std::endl;
-    std::cout << "WPA REPLY: " << (int)bufferSize << " " << buffer << std::endl;
+    if(logResult)
+    {
+        std::cout << "WPA COMMAND: " << cmd << std::endl;
+        std::cout << "WPA REPLY: " << (int)bufferSize << " " << buffer << std::endl;
+    }
 
     if(result)
     {
@@ -276,6 +281,35 @@ void NetworkScreen::handleButtonPress(const GameControllerEvent * event)
     }
 }
 
+void NetworkScreen::populateNetworks()
+{
+    collection->clearItems();
+
+    std::list<std::string> networkList;
+    run_wpa_command(ctrl, "SCAN_RESULTS", &networkList);
+    networkList.erase(networkList.begin());
+    for(auto & network : networkList)
+    {
+        network = network.substr(network.find_last_of('\t')+1);
+    }
+
+    GuiHelper & guiHelper = GuiHelper::GetInstance();
+
+    for(const auto & network : networkList)
+    {
+        // Ignore if network name is missing or network is hidden
+        if(network.size() == 0 || network.compare(0, 4, "\\x00") == 0)
+            continue;
+        
+        GenericMenuEntryPtr networkButton = std::make_shared<GenericMenuEntry>(guiHelper.GetTexture(GuiElement::LIST_NORMAL), guiHelper.GetTexture(GuiElement::LIST_FOCUS), 440);
+        networkButton->SetLeft(network);
+        networkButton->onPress[ConnectBtn.SDL_Value] = std::bind(&NetworkScreen::connectToNetwork, this, network);
+        networkButton->onPress[RemoveBtn.SDL_Value] = std::bind(&NetworkScreen::removeNetwork, this, network);
+        networkButton->onEnter = std::bind(&NetworkScreen::updateIcons, this, network);
+        collection->addItem(std::dynamic_pointer_cast<MenuItem>(networkButton));
+    }
+}
+
 void NetworkScreen::removeNetwork(const std::string & ssid)
 {
     if(networks.count(ssid))
@@ -290,36 +324,43 @@ void NetworkScreen::removeNetwork(const std::string & ssid)
 
 void NetworkScreen::scan()
 {
-    collection->clearItems();
-#ifdef __arm__
-    run_wpa_command(ctrl, "SCAN");
-    std::list<std::string> networkList;
-    run_wpa_command(ctrl, "SCAN_RESULTS", &networkList);
-    networkList.erase(networkList.begin());
-    for(auto & network : networkList)
-    {
-        network = network.substr(network.find_last_of('\t')+1);
-    }
-#else
-    std::list<std::string> networkList;
-    for(int i = 0; i < 30; ++i)
-        networkList.push_back("Network" + std::to_string(i));
-#endif
+    // Check that wpa is ready for scanning
+    if(run_wpa_command_return_value(ctrl, "SCAN").compare("OK") != 0)
+        return;
 
-    GuiHelper & guiHelper = GuiHelper::GetInstance();
+    // Create a message box to wait for wpa to report scanning completed
+    isConnecting = true;
+    auto msgBox = std::make_shared<MessageBox>("Information", "Scanning networks.", renderer);
+    items.push_back(msgBox);
+    msgBox->setPosition(640, 360);
+    msgBox->backgroundTask = std::async(std::launch::async,
+                                        [this]()
+                                        {
+                                            std::string wpaState = "SCANNING";
+                                            while(wpaState.compare("SCANNING") == 0)
+                                            {
+                                                std::this_thread::sleep_for(100ms);
 
-    for(const auto & network : networkList)
-    {
-        if(network.size() == 0)
-            continue;
-        
-        GenericMenuEntryPtr networkButton = std::make_shared<GenericMenuEntry>(guiHelper.GetTexture(GuiElement::LIST_NORMAL), guiHelper.GetTexture(GuiElement::LIST_FOCUS), 440);
-        networkButton->SetLeft(network);
-        networkButton->onPress[ConnectBtn.SDL_Value] = std::bind(&NetworkScreen::connectToNetwork, this, network);
-        networkButton->onPress[RemoveBtn.SDL_Value] = std::bind(&NetworkScreen::removeNetwork, this, network);
-        networkButton->onEnter = std::bind(&NetworkScreen::updateIcons, this, network);
-        collection->addItem(std::dynamic_pointer_cast<MenuItem>(networkButton));
-    }
+                                                std::list<std::string> result;
+                                                run_wpa_command(ctrl, "STATUS", &result, false);
+
+                                                for (const std::string &line : result)
+                                                {
+                                                    std::string variable = line.substr(0, line.find('='));
+                                                    if (variable.compare("wpa_state") == 0)
+                                                        wpaState = line.substr(line.find('=') + 1);
+                                                }
+                                            }
+                                        });
+    msgBox->endFunction =   [this, prevSelectedItem = selectedItem]()
+                            {
+                                items.erase(--items.end());
+                                selectedItem = prevSelectedItem;
+                                isConnecting = false;
+                                populateNetworks();
+                            };
+
+    selectedItem = items.size() - 1;
 }
 
 void NetworkScreen::updateIcons(const std::string & ssid)
