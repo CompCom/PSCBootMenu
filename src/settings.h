@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -14,9 +14,8 @@
 #include "menuitems/menuitem.h"
 #include <map>
 
-struct BoolToggle;
+struct SettingsToggle;
 class SDL_Context;
-struct ThemeToggle;
 extern std::string cfgLocation;
 extern std::string defaultCfgLocation;
 extern std::string uiThemesFolder;
@@ -34,9 +33,8 @@ private:
     void saveConfig();
 
     std::map<std::string, std::string> variableTypeMap;
-    std::map<std::string, std::shared_ptr<BoolToggle>> bool_variables;
+    std::map<std::string, std::shared_ptr<SettingsToggle>> known_variables;
     std::map<std::string, std::string> unk_variables;
-    std::shared_ptr<ThemeToggle> theme_variable;
     std::list<std::string> lines;
 };
 

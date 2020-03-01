@@ -34,6 +34,7 @@ public:
     ~GuiHelper();
     static GuiHelper & GetInstance();
     void AttachRenderer(SDL_Renderer * renderer);
+    Texture CreateArrowedText(Texture & valueTexture, const int spacing = 5);
     Texture CreateTitleTexture(const std::string & titleString, int x, int y, bool centered = true);
     Texture CreateFooterItemTexture(GuiElement element, const std::string & text, TextItemType itemType);
     void CreateFooterItems(const std::initializer_list<std::tuple<GuiElement, std::string>> & items, std::list<Texture> & textures, int yPos = 660);

@@ -27,6 +27,26 @@ void GuiHelper::AttachRenderer(SDL_Renderer * renderer)
     generateCommonTextures();
 }
 
+Texture GuiHelper::CreateArrowedText(Texture & valueTexture, const int spacing)
+{
+    Texture arrow = GuiHelper::GetInstance().GetTexture(GuiElement::ARROW_RIGHT);
+    const int arrowW = arrow.rect.w;
+    const auto & valueRect = valueTexture.rect;
+
+    Texture outputTexture;
+    outputTexture.CreateRendableTexture(renderer, (valueRect.w + (arrowW + spacing) * 2), valueRect.h, 0, 0, false);
+    outputTexture.SetAsRenderTarget(renderer);
+    arrow.SetPosition(arrowW/2, outputTexture.rect.h/2, true);
+    arrow.Draw(renderer, SDL_RendererFlip::SDL_FLIP_HORIZONTAL);
+    valueTexture.SetPosition((arrowW + spacing), 0, false);
+    valueTexture.Draw(renderer);
+    arrow.rect.x = valueRect.x + valueRect.w + spacing;
+    arrow.Draw(renderer);
+    SDL_SetRenderTarget(renderer, NULL);
+
+    return outputTexture;
+}
+
 Texture GuiHelper::CreateTitleTexture(const std::string & titleString, int x, int y, bool centered)
 {
     Texture title;

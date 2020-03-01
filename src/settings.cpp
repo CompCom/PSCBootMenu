@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -12,6 +12,7 @@
 #include "languagemanager.h"
 #include "menuitems/booltoggle.h"
 #include "menuitems/itemcollection.h"
+#include "menuitems/languagetoggle.h"
 #include "menuitems/pushbutton.h"
 #include "menuitems/themetoggle.h"
 #include "menuitems/vitemscrollcollection.h"
@@ -90,13 +91,18 @@ void SettingsScreen::Init()
             {
                 if(variableTypeIter->second.compare("bool") == 0)
                 {
-                    bool_variables[var_name] = std::make_shared<BoolToggle>(LanguageManager::GetString(var_name), value.compare("\"1\"") == 0);
-                    container->addItem(bool_variables[var_name]);
+                    known_variables[var_name] = std::make_shared<BoolToggle>(LanguageManager::GetString(var_name), value);
+                    container->addItem(std::dynamic_pointer_cast<MenuItem>(known_variables[var_name]));
                 }
                 else if(variableTypeIter->second.compare("theme") == 0 && uiThemesFolder.size())
                 {
-                    theme_variable = std::make_shared<ThemeToggle>(LanguageManager::GetString(var_name), value);
-                    container->addItem(theme_variable);
+                    known_variables[var_name] = std::make_shared<ThemeToggle>(LanguageManager::GetString(var_name), value);
+                    container->addItem(std::dynamic_pointer_cast<MenuItem>(known_variables[var_name]));
+                }
+                else if(variableTypeIter->second.compare("language") == 0)
+                {
+                    known_variables[var_name] = std::make_shared<LanguageToggle>(LanguageManager::GetString(var_name), value);
+                    container->addItem(std::dynamic_pointer_cast<MenuItem>(known_variables[var_name]));
                 }
                 else
                     unk_variables[var_name] = value;
@@ -126,10 +132,10 @@ void SettingsScreen::Init()
                 auto variableTypeIter = variableTypeMap.find(var_name);
                 if(variableTypeIter != variableTypeMap.end())
                 {
-                    if(variableTypeIter->second.compare("bool") == 0)
-                        bool_variables[var_name]->UpdateSlider(value.compare("\"1\"") == 0);
-                    else if(variableTypeIter->second.compare("theme") == 0 && uiThemesFolder.size())
-                        theme_variable->setSelectedValue(value);
+                    if((variableTypeIter->second.compare("bool") == 0) ||
+                       (variableTypeIter->second.compare("theme") == 0 && uiThemesFolder.size()) ||
+                       (variableTypeIter->second.compare("language") == 0))
+                        known_variables[var_name]->SetValueFromConfig(value);
                     else
                         unk_variables[var_name] = value;
                 }
@@ -241,17 +247,9 @@ void SettingsScreen::saveConfig()
         {
             if(line[0] == ';' || line[0] == '[')
                 out << line << "\n";
-            else if(bool_variables.count(line))
+            else if(known_variables.count(line))
             {
-                out << line << "=";
-                if(bool_variables[line]->value)
-                    out << "\"1\"\n";
-                else
-                    out << "\"0\"\n";
-            }
-            else if(line.compare("selected_theme") == 0 && uiThemesFolder.size())
-            {
-                out << line << "=\"" << theme_variable->values[theme_variable->selectedValue] << "\"\n";
+                out << line << "=" << known_variables[line]->GetConfigValue() << "\n";
             }
             else
             {

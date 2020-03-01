@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -86,7 +86,7 @@ int main(int argc, char * argv[])
     }
 
     //Populate default language file path
-    if(languageFile.size() == 0)
+    if(languageFile.size() == 0 || fs::is_regular_file(languageFile) == false)
         languageFile = boot_menu_folder/"languages/ENG.json";
 
     MenuScreenManager manager(&sdl_context);

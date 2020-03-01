@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -9,10 +9,12 @@
  
 #include "languagemanager.h"
 #include "json.hpp"
+#include <experimental/filesystem>
 #include <fstream>
 #include <iostream>
 
 using json = nlohmann::json;
+namespace fs = std::experimental::filesystem;
 
 LanguageManager::LanguageManager()
 {
@@ -28,6 +30,11 @@ LanguageManager& LanguageManager::GetInstance()
 {
     static LanguageManager _instance;
     return _instance;
+}
+
+std::string LanguageManager::GetLanguageFolder()
+{
+    return GetInstance().languageFolder;
 }
 
 std::string LanguageManager::GetString(const std::string & stringId)
@@ -49,6 +56,8 @@ bool LanguageManager::_loadLanguage(const std::string & languageJSONPath)
     std::ifstream in(languageJSONPath);
     if(in.is_open() == false)
         return false;
+
+    languageFolder = fs::path(languageJSONPath).parent_path();
 
     json j;
     try
