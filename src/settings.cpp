@@ -52,13 +52,13 @@ void SettingsScreen::Init()
 {
     if(cfgLocation.size() == 0 || defaultCfgLocation.size() == 0)
     {
-        manager->DisplayErrorScreen("Missing config location.", true);
+        manager->DisplayErrorScreen(LanguageManager::GetString("missing_config_location"), true);
         return;
     }
 
     if(loadVariableTypes() == false)
     {
-        manager->DisplayErrorScreen("Error loading variable type data. See log for details.", true);
+        manager->DisplayErrorScreen(LanguageManager::GetString("variable_type_error"), true);
         return;
     }
 
@@ -66,7 +66,7 @@ void SettingsScreen::Init()
     in.open(defaultCfgLocation);
     if(!in.is_open())
     {
-        manager->DisplayErrorScreen("Cannot open default config.", true);
+        manager->DisplayErrorScreen(LanguageManager::GetString("default_config_error"), true);
         return;
     }
 
@@ -179,18 +179,17 @@ void SettingsScreen::handleButtonPress(const GameControllerEvent * event)
             ItemCollectionPtr container = std::make_shared<ItemCollection>();
             container->collectionType = ItemCollection::HORIZONTAL;
 
-            PushButtonPtr no = std::make_shared<PushButton>("NO", 28, 740, 560);
+            PushButtonPtr no = std::make_shared<PushButton>(LanguageManager::GetString("no"), 28, 740, 560);
             no->onPress = std::bind(&MenuScreenManager::RemoveCurrentScreen, manager);
             container->items.push_back(no);
-            PushButtonPtr yes = std::make_shared<PushButton>("YES", 28, 540, 560);
+            PushButtonPtr yes = std::make_shared<PushButton>(LanguageManager::GetString("yes"), 28, 540, 560);
             container->items.push_back(yes);
 #ifdef SEGA
             yes->onPress = [this]() { this->saveConfig(); manager->RemoveAllScreens(); system("echo -n restart > /tmp/launchfilecommand"); };
-            manager->AddNewScreen<WarningScreen>("Are you sure you want to overwrite the old settings?\nConsole will restart after saving.", container);
 #else
             yes->onPress = [this]() { this->saveConfig(); manager->RemoveAllScreens(); };
-            manager->AddNewScreen<WarningScreen>("Are you sure you want to overwrite the old settings?\nConsole will shut down after saving.", container);
 #endif
+            manager->AddNewScreen<WarningScreen>(LanguageManager::GetString("settings_save_confirmation"), container);
         }
         break;
     default:
@@ -263,6 +262,6 @@ void SettingsScreen::saveConfig()
     {
         std::cerr << "Could not open cfg file: " << cfgLocation << std::endl;
         manager->RemoveAllScreens();
-        manager->DisplayErrorScreen("Could not open cfg file.");
+        manager->DisplayErrorScreen(LanguageManager::GetString("settings_config_open_error"));
     }
 }

@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -8,6 +8,7 @@
   */
  
 #include "font.h"
+#include "languagemanager.h"
 #include "menuscreenmanager.h"
 #include "warningscreen.h"
 #include <iostream>
@@ -24,6 +25,6 @@ WarningScreen::~WarningScreen()
 }
 void WarningScreen::Init()
 {
-    textures.push_back(FontManager::CreateTexture(TextItemType::WARNING_HEADER_TEXT, (isError) ? "ERROR!" : "WARNING!", 48, 640, 80, true));
+    textures.push_back(FontManager::CreateTexture(TextItemType::WARNING_HEADER_TEXT, (isError) ? LanguageManager::GetString("error_title") : LanguageManager::GetString("warning_title"), 48, 640, 80, true));
     textures.push_back(FontManager::CreateTexture(TextItemType::DEFAULT_TEXT, warningText, 28, 640, 360, true));
 }

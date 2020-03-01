@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -52,7 +52,7 @@ void MainScreen::Init()
                                 },
                                 textures, 590, BOOT_FOOTER_TEXT);
     guiHelper.CreateFooterItems({
-                                    {AutoBootBtn.GUI_Value, "Toggle AutoBoot"}
+                                    {AutoBootBtn.GUI_Value, LanguageManager::GetString("toggle_autoboot")}
                                 },
                                 textures, 630, BOOT_FOOTER_TEXT);
 
@@ -174,7 +174,7 @@ void MainScreen::selectBootItem(BootItem * bootItem)
     if(bootItem->Launch())
         manager->RemoveAllScreens();
     else
-        manager->DisplayErrorScreen("Cannot open launch command file.", true);
+        manager->DisplayErrorScreen(LanguageManager::GetString("open_launch_command_error"), true);
 }
 
 bool MainScreen::saveToJSON(BootItem * bootItem)
@@ -185,14 +185,14 @@ bool MainScreen::saveToJSON(BootItem * bootItem)
         //SUCCESS
         return true;
     case 1:
-        manager->DisplayErrorScreen("Cannot open json file:\n" + bootItem->filename);
+        manager->DisplayErrorScreen(LanguageManager::GetString("open_json_error") + "\n" + bootItem->filename);
         break;
     case 2:
-        manager->DisplayErrorScreen("Error occurred while writing json file:\n" + bootItem->filename);
+        manager->DisplayErrorScreen(LanguageManager::GetString("write_json_error") + "\n" + bootItem->filename);
         break;
     default:
         std::cerr << "No idea wtf just happened here." << std::endl;
-        manager->DisplayErrorScreen("An unknown error occurred while writing json file:\n" + bootItem->filename);
+        manager->DisplayErrorScreen(LanguageManager::GetString("unknown_json_error") + "\n" + bootItem->filename);
         break;
     }
     return false;
@@ -211,7 +211,7 @@ void MainScreen::setAutoBoot(BootItem * autoBootItem)
     autoBootItem->autoBoot = !autoBootItem->autoBoot;
     if(saveToJSON(autoBootItem))
     {
-        auto msgBox = std::make_shared<MessageBox>("Information", (autoBootItem->autoBoot) ? "AutoBoot has been set." : "AutoBoot has been unset.", renderer);
+        auto msgBox = std::make_shared<MessageBox>(LanguageManager::GetString("info_box_title"), (autoBootItem->autoBoot) ? LanguageManager::GetString("autoboot_set") : LanguageManager::GetString("autoboot_unset"), renderer);
         items.push_back(msgBox);
         msgBox->setPosition(640,360);
         msgBox->backgroundTask = std::async(std::launch::async, []() { std::this_thread::sleep_for(std::chrono::seconds(1)); } );

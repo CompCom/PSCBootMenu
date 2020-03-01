@@ -103,13 +103,13 @@ void NetworkScreen::Init()
     textures.push_back(guiHelper.CreateTitleTexture(LanguageManager::GetString("nm_title"), 640, 72));
     if(system("ip link set wlan0 up") != 0)
     {
-        manager->DisplayErrorScreen("Cannot detect wireless adapter.", true);
+        manager->DisplayErrorScreen(LanguageManager::GetString("cannot_find_adapter"), true);
         return;
     }
     ctrl = wpa_ctrl_open("/var/run/wpa_supplicant/wlan0");
     if(ctrl == nullptr || run_wpa_command_return_value(ctrl, "PING").compare("PONG") != 0)
     {
-        manager->DisplayErrorScreen("Cannot connect to wpa supplicant.", true);
+        manager->DisplayErrorScreen(LanguageManager::GetString("wpa_connection_error"), true);
         return;
     }
 
@@ -177,13 +177,13 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
             std::string netIdString = run_wpa_command_return_value(ctrl, "ADD_NETWORK");
             if(netIdString.compare("FAIL") == 0)
             {
-                manager->DisplayErrorScreen("Failed to add new network.");
+                manager->DisplayErrorScreen(LanguageManager::GetString("network_add_error"));
                 return;
             }
             int netId = std::stoi(netIdString);
             if(run_wpa_command_return_value(ctrl, "SET_NETWORK " + netIdString + " ssid \"" + ssid + "\"").compare("OK") != 0)
             {
-                manager->DisplayErrorScreen("Failed to set network ssid.");
+                manager->DisplayErrorScreen(LanguageManager::GetString("network_ssid_error"));
                 return;
             }
             if(password.size())
@@ -199,7 +199,7 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
                 if(psk.size() == 0 || run_wpa_command_return_value(ctrl, "SET_NETWORK " + netIdString + " psk " + psk).compare("OK") != 0)
                 {
                     run_wpa_command(ctrl, "REMOVE_NETWORK " + netIdString);
-                    manager->DisplayErrorScreen("Failed to set network password.");
+                    manager->DisplayErrorScreen(LanguageManager::GetString("network_password_error"));
                     return;
                 }
             }
@@ -207,7 +207,7 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
 
             createConnectingMessageBox(ssid);
         };
-        manager->AddNewScreen<EditTextScreen>("ENTER PASSWORD", nullptr, callback);
+        manager->AddNewScreen<EditTextScreen>(LanguageManager::GetString("enter_pass_title"), nullptr, callback);
 
         return;
     }
@@ -218,7 +218,7 @@ void NetworkScreen::connectToNetwork(const std::string & ssid)
 void NetworkScreen::createConnectingMessageBox(const std::string & ssid)
 {
     isConnecting = true;
-    auto msgBox = std::make_shared<MessageBox>("Information", "Attempting to connect to network.", renderer);
+    auto msgBox = std::make_shared<MessageBox>(LanguageManager::GetString("info_box_title"), LanguageManager::GetString("network_connecting"), renderer);
     items.push_back(msgBox);
     msgBox->setPosition(640,360);
     msgBox->backgroundTask = std::async(std::launch::async, [this,ssid]() { enableNetwork(ssid); } );
@@ -228,7 +228,7 @@ void NetworkScreen::createConnectingMessageBox(const std::string & ssid)
                                 selectedItem = prevSelectedItem;
                                 isConnecting = false;
                                 if(run_wpa_command_return_value(ctrl, "SAVE_CONFIG").compare("OK") != 0)
-                                    manager->DisplayErrorScreen("Failed to save network config.");
+                                    manager->DisplayErrorScreen(LanguageManager::GetString("save_net_config_failed"));
                             };
     selectedItem = items.size()-1;
 }
@@ -317,7 +317,7 @@ void NetworkScreen::removeNetwork(const std::string & ssid)
         run_wpa_command(ctrl, "REMOVE_NETWORK " + std::to_string(networks[ssid]));
         networks.erase(ssid);
         if(run_wpa_command_return_value(ctrl, "SAVE_CONFIG").compare("OK") != 0)
-            manager->DisplayErrorScreen("Failed to save network config.");
+            manager->DisplayErrorScreen(LanguageManager::GetString("save_net_config_failed"));
     }
     updateIcons(ssid);
 }
@@ -330,7 +330,7 @@ void NetworkScreen::scan()
 
     // Create a message box to wait for wpa to report scanning completed
     isConnecting = true;
-    auto msgBox = std::make_shared<MessageBox>("Information", "Scanning networks.", renderer);
+    auto msgBox = std::make_shared<MessageBox>(LanguageManager::GetString("info_box_title"), LanguageManager::GetString("scanning_networks"), renderer);
     items.push_back(msgBox);
     msgBox->setPosition(640, 360);
     msgBox->backgroundTask = std::async(std::launch::async,

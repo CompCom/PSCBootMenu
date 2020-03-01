@@ -1,5 +1,5 @@
 /**
-  * Copyright (C) 2018-2019 CompCom
+  * Copyright (C) 2018-2020 CompCom
   *
   * This program is free software; you can redistribute it and/or
   * modify it under the terms of the GNU General Public License
@@ -11,6 +11,7 @@
 #include "font.h"
 #include "gamebutton.h"
 #include "guihelper.h"
+#include "languagemanager.h"
 #include "menuitems/keyboardbutton.h"
 #include "menuscreenmanager.h"
 #include <algorithm>
@@ -41,12 +42,12 @@ void EditTextScreen::Init()
     textures.push_back(guiHelper.CreateTitleTexture(title, 640, 72));
     textures.push_back(guiHelper.GetTexture(GuiElement::FOOTER));
     guiHelper.CreateFooterItems({
-                                    {CapsBtn.GUI_Value, "Caps Lock"},
-                                    {BackSpaceBtn.GUI_Value, "Back Space"},
-                                    {InsertBtn.GUI_Value, "Insert"},
-                                    {CancelBtn.GUI_Value, "Cancel"},
-                                    {SpaceBtn.GUI_Value, "Space"},
-                                    {ConfirmBtn.GUI_Value, "Confirm"}
+                                    {CapsBtn.GUI_Value, LanguageManager::GetString("capslock")},
+                                    {BackSpaceBtn.GUI_Value, LanguageManager::GetString("backspace")},
+                                    {InsertBtn.GUI_Value, LanguageManager::GetString("insert")},
+                                    {CancelBtn.GUI_Value, LanguageManager::GetString("cancel")},
+                                    {SpaceBtn.GUI_Value, LanguageManager::GetString("space")},
+                                    {ConfirmBtn.GUI_Value, LanguageManager::GetString("confirm")}
                                 },
                                 textures);
     textures.insert(textures.end(), guiHelper.GetTexture(GuiElement::LINE_BREAK))->SetPosition(640, 590, true);
@@ -73,8 +74,8 @@ void EditTextScreen::Init()
     collection->collectionType = ItemCollection::HORIZONTAL;
     collection->moveItem = false;
     items.push_back(collection);
-    auto backspaceGUIButton = std::make_shared<PushButton>("Backspace", 20, 590, 541);
-    auto spaceGUIButton = std::make_shared<PushButton>("Space", 20, 690, 541);
+    auto backspaceGUIButton = std::make_shared<PushButton>(LanguageManager::GetString("backspace"), 20, 590, 541);
+    auto spaceGUIButton = std::make_shared<PushButton>(LanguageManager::GetString("space"), 20, 690, 541);
     backspaceGUIButton->onPress = std::bind(&EditTextScreen::backspace, this);
     spaceGUIButton->onPress = std::bind(&EditTextScreen::space, this);
     collection->addItem(backspaceGUIButton);
