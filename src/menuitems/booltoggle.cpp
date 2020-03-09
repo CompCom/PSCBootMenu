@@ -14,7 +14,6 @@ BoolToggle::BoolToggle(const std::string & variable_name, const std::string & va
 {
     SetValueFromConfig(value);
     SetLeft(variable_name);
-    UpdateSlider(this->value);
     onPress[SDL_CONTROLLER_BUTTON_A] = [this](){ UpdateSlider(!this->value); };
     onPress[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = std::bind(&BoolToggle::UpdateSlider, this, false);
     onPress[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = std::bind(&BoolToggle::UpdateSlider, this, true);
@@ -27,7 +26,7 @@ std::string BoolToggle::GetConfigValue() const
 
 void BoolToggle::SetValueFromConfig(const std::string & value)
 {
-    this->value = (value.compare("\"1\"") == 0);
+    UpdateSlider(value.compare("\"1\"") == 0);
 }
 
 void BoolToggle::UpdateSlider(bool newValue)
